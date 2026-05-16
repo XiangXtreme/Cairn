@@ -12,7 +12,7 @@ from cairn.dispatcher.config import DispatchConfig, WorkerConfig
 from cairn.dispatcher.models import ReasonCheckpoint, RunningTask
 from cairn.dispatcher.protocol.client import CairnClient
 from cairn.dispatcher.runtime.cancellation import TaskCancellation
-from cairn.dispatcher.runtime.local import LocalRuntimeManager
+from cairn.dispatcher.runtime.manager import create_runtime_manager
 from cairn.dispatcher.runtime.startup_healthcheck import format_failure_summary, run_startup_healthchecks
 from cairn.dispatcher.scheduler.worker_select import choose_worker
 from cairn.dispatcher.tasks.bootstrap import run_bootstrap_task
@@ -41,7 +41,7 @@ class DispatcherLoop:
         self.config_path = config_path
         self.config = DispatchConfig.load(config_path)
         self.client = CairnClient(self.config.server)
-        self.runtime_manager = LocalRuntimeManager(self.config.execution)
+        self.runtime_manager = create_runtime_manager(self.config)
         self.executor = ThreadPoolExecutor(max_workers=self.config.runtime.max_workers)
         self.futures: dict[Future[str], RunningTask] = {}
         self.reason_checkpoints: dict[str, ReasonCheckpoint] = {}
@@ -675,6 +675,7 @@ class DispatcherLoop:
                         task.hint_count,
                         task.open_intent_count,
                     )
+                self._cleanup_terminal_project(task.project_id)
             except Exception:
                 LOG.exception("task crashed project=%s task=%s worker=%s", task.project_id, task.task_type, task.worker_name)
 
@@ -694,6 +695,22 @@ class DispatcherLoop:
                     task.worker_name,
                     status,
                 )
+        for summary in summaries:
+            if summary.status == "stopped":
+                self.runtime_manager.cleanup_stopped(summary.id)
+
+    def _cleanup_terminal_project(self, project_id: str) -> None:
+        if any(task.project_id == project_id for task in self.futures.values()):
+            return
+        try:
+            project = self.client.get_project(project_id)
+        except requests.RequestException:
+            LOG.debug("skip terminal cleanup because project fetch failed project=%s", project_id)
+            return
+        if project.project.status == "completed":
+            self.runtime_manager.cleanup_completed(project_id)
+        elif project.project.status == "stopped":
+            self.runtime_manager.cleanup_stopped(project_id)
 
     def _initialize_reason_checkpoints(self, summaries: list[ProjectSummary]) -> None:
         for summary in summaries:

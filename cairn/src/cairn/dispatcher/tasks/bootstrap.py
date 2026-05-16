@@ -12,7 +12,7 @@ from cairn.dispatcher.contracts import (
 from cairn.dispatcher.prompting import format_hints, load_prompt, render_prompt
 from cairn.dispatcher.protocol.client import CairnClient
 from cairn.dispatcher.runtime.cancellation import TaskCancellation
-from cairn.dispatcher.runtime.local import LocalRuntimeManager
+from cairn.dispatcher.runtime.manager import RuntimeManager
 from cairn.dispatcher.runtime.heartbeat import HeartbeatLease
 from cairn.dispatcher.tasks.common import (
     best_effort_release,
@@ -36,7 +36,7 @@ LOG = logging.getLogger(__name__)
 def run_bootstrap_task(
     config: DispatchConfig,
     client: CairnClient,
-    runtime_manager: LocalRuntimeManager,
+    runtime_manager: RuntimeManager,
     project: ProjectDetail,
     intent: Intent,
     worker: WorkerConfig,
@@ -51,7 +51,7 @@ def run_bootstrap_task(
         workspace_name = runtime_manager.ensure_running(project.project.id)
 
         LOG.info(
-            "starting local process project=%s intent=%s worker=%s phase=bootstrap_healthcheck timeout=%ss",
+            "starting worker process project=%s intent=%s worker=%s phase=bootstrap_healthcheck timeout=%ss",
             project.project.id,
             intent.id,
             worker.name,
@@ -255,7 +255,7 @@ def run_bootstrap_task(
 def _try_conclude_fallback(
     config: DispatchConfig,
     client: CairnClient,
-    runtime_manager: LocalRuntimeManager,
+    runtime_manager: RuntimeManager,
     workspace_name: str,
     worker: WorkerConfig,
     driver,

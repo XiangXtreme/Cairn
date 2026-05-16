@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 
 from cairn.dispatcher.config import DispatchConfig, WorkerConfig
-from cairn.dispatcher.runtime.local import LocalRuntimeManager
+from cairn.dispatcher.runtime.manager import RuntimeManager
 from cairn.dispatcher.tasks.common import run_healthcheck
 from cairn.dispatcher.workers.registry import get_driver
 
@@ -27,7 +27,7 @@ class StartupHealthcheckResult:
 
 def run_startup_healthchecks(
     config: DispatchConfig,
-    runtime_manager: LocalRuntimeManager,
+    runtime_manager: RuntimeManager,
     *,
     show_commands: bool = False,
 ) -> list[StartupHealthcheckResult]:
@@ -87,7 +87,7 @@ def format_failure_summary(results: list[StartupHealthcheckResult]) -> str:
 
 
 def _run_worker_healthcheck(
-    runtime_manager: LocalRuntimeManager,
+    runtime_manager: RuntimeManager,
     workspace_name: str,
     worker: WorkerConfig,
     timeout_seconds: int,

@@ -1,0 +1,36 @@
+from __future__ import annotations
+
+from typing import Protocol
+
+from cairn.dispatcher.config import DispatchConfig
+from cairn.dispatcher.runtime.local import LocalRuntimeManager
+from cairn.dispatcher.runtime.process import ManagedProcess
+
+
+class RuntimeManager(Protocol):
+    def close(self) -> None: ...
+    def workspace_name(self, project_id: str) -> str: ...
+    def ensure_running(self, project_id: str) -> str: ...
+    def ensure_startup_workspace(self) -> str: ...
+    def build_exec_process(
+        self,
+        workspace_name: str,
+        env: dict[str, str],
+        command: list[str],
+        timeout_seconds: int | None = None,
+    ) -> ManagedProcess: ...
+    def workspace_path(self, workspace_name: str): ...
+    def write_text_file(self, workspace_name: str, relative_path: str, content: str) -> str: ...
+    def write_observer_text_file(self, relative_path: str, content: str) -> str: ...
+    def cleanup_completed(self, project_id: str) -> bool: ...
+    def cleanup_stopped(self, project_id: str) -> bool: ...
+
+
+def create_runtime_manager(config: DispatchConfig) -> RuntimeManager:
+    if config.execution.backend == "local":
+        return LocalRuntimeManager(config.execution)
+    if config.container is None:
+        raise RuntimeError("container config is required when execution.backend is docker")
+    from cairn.dispatcher.runtime.docker import DockerRuntimeManager
+
+    return DockerRuntimeManager(config.execution, config.container)

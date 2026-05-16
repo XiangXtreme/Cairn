@@ -13,7 +13,7 @@ from cairn.dispatcher.prompting import (
 )
 from cairn.dispatcher.protocol.client import CairnClient
 from cairn.dispatcher.runtime.cancellation import TaskCancellation
-from cairn.dispatcher.runtime.local import LocalRuntimeManager
+from cairn.dispatcher.runtime.manager import RuntimeManager
 from cairn.dispatcher.runtime.heartbeat import HeartbeatLease
 from cairn.dispatcher.tasks.common import (
     best_effort_release_reason,
@@ -35,7 +35,7 @@ LOG = logging.getLogger(__name__)
 def run_reason_task(
     config: DispatchConfig,
     client: CairnClient,
-    runtime_manager: LocalRuntimeManager,
+    runtime_manager: RuntimeManager,
     project: ProjectDetail,
     export_yaml: str,
     worker: WorkerConfig,
@@ -50,7 +50,7 @@ def run_reason_task(
         workspace_name = runtime_manager.ensure_running(project.project.id)
 
         LOG.info(
-            "starting local process project=%s worker=%s phase=reason_healthcheck timeout=%ss",
+            "starting worker process project=%s worker=%s phase=reason_healthcheck timeout=%ss",
             project.project.id,
             worker.name,
             healthcheck_timeout,

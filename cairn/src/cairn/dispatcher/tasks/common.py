@@ -12,7 +12,7 @@ from cairn.dispatcher.config import WorkerConfig
 from cairn.dispatcher.protocol.client import CairnClient
 from cairn.dispatcher.runtime.cancellation import TaskCancellation
 from cairn.dispatcher.runtime.heartbeat import HeartbeatLease
-from cairn.dispatcher.runtime.local import LocalRuntimeManager
+from cairn.dispatcher.runtime.manager import RuntimeManager
 from cairn.dispatcher.runtime.process import ProcessResult
 
 LOG_PREVIEW_LIMIT = 1200
@@ -69,7 +69,7 @@ def now_utc_iso() -> str:
 
 
 def start_worker_run_record(
-    runtime_manager: LocalRuntimeManager,
+    runtime_manager: RuntimeManager,
     *,
     project_id: str,
     intent_id: str | None,
@@ -99,7 +99,7 @@ def start_worker_run_record(
 
 
 def finish_worker_run_record(
-    runtime_manager: LocalRuntimeManager,
+    runtime_manager: RuntimeManager,
     record: WorkerRunRecord | None,
     result: ProcessResult,
     *,
@@ -122,7 +122,7 @@ def finish_worker_run_record(
     write_worker_run_record(runtime_manager, record)
 
 
-def write_worker_run_record(runtime_manager: LocalRuntimeManager, record: WorkerRunRecord) -> None:
+def write_worker_run_record(runtime_manager: RuntimeManager, record: WorkerRunRecord) -> None:
     payload = {
         "schema_version": 1,
         "run_id": record.run_id,
@@ -163,7 +163,7 @@ def cancel_reason(result: ProcessResult, cancellation: TaskCancellation | None =
 
 
 def write_graph_snapshot_reference(
-    runtime_manager: LocalRuntimeManager,
+    runtime_manager: RuntimeManager,
     workspace_name: str,
     graph_yaml: str,
     *,
@@ -180,7 +180,7 @@ def write_graph_snapshot_reference(
 
 
 def run_healthcheck(
-    runtime_manager: LocalRuntimeManager,
+    runtime_manager: RuntimeManager,
     workspace_name: str,
     worker: WorkerConfig,
     command: list[str],
@@ -213,7 +213,7 @@ def run_healthcheck(
 
 
 def run_worker_process(
-    runtime_manager: LocalRuntimeManager,
+    runtime_manager: RuntimeManager,
     workspace_name: str,
     worker: WorkerConfig,
     argv: list[str],
@@ -224,7 +224,7 @@ def run_worker_process(
     cancellation: TaskCancellation | None = None,
 ) -> ProcessResult:
     LOG.info(
-        "starting local process workspace=%s worker=%s phase=%s timeout=%ss",
+        "starting worker process workspace=%s worker=%s phase=%s timeout=%ss",
         workspace_name,
         worker.name,
         phase,

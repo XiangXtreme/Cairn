@@ -8,7 +8,7 @@ from cairn.dispatcher.contracts import parse_json_output, validate_explore_paylo
 from cairn.dispatcher.prompting import load_prompt, render_prompt
 from cairn.dispatcher.protocol.client import CairnClient
 from cairn.dispatcher.runtime.cancellation import TaskCancellation
-from cairn.dispatcher.runtime.local import LocalRuntimeManager
+from cairn.dispatcher.runtime.manager import RuntimeManager
 from cairn.dispatcher.runtime.heartbeat import HeartbeatLease
 from cairn.dispatcher.tasks.common import (
     best_effort_release,
@@ -32,7 +32,7 @@ LOG = logging.getLogger(__name__)
 def run_explore_task(
     config: DispatchConfig,
     client: CairnClient,
-    runtime_manager: LocalRuntimeManager,
+    runtime_manager: RuntimeManager,
     project: ProjectDetail,
     export_yaml: str,
     intent: Intent,
@@ -48,7 +48,7 @@ def run_explore_task(
         workspace_name = runtime_manager.ensure_running(project.project.id)
 
         LOG.info(
-            "starting local process project=%s intent=%s worker=%s phase=explore_healthcheck timeout=%ss",
+            "starting worker process project=%s intent=%s worker=%s phase=explore_healthcheck timeout=%ss",
             project.project.id,
             intent.id,
             worker.name,
@@ -262,7 +262,7 @@ def run_explore_task(
 def _try_conclude_fallback(
     config: DispatchConfig,
     client: CairnClient,
-    runtime_manager: LocalRuntimeManager,
+    runtime_manager: RuntimeManager,
     workspace_name: str,
     worker: WorkerConfig,
     driver,
@@ -417,7 +417,7 @@ def _try_conclude_fallback(
 
 
 def _run_process(
-    runtime_manager: LocalRuntimeManager,
+    runtime_manager: RuntimeManager,
     workspace_name: str,
     worker: WorkerConfig,
     argv: list[str],

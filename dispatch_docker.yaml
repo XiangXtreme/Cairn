@@ -1,0 +1,69 @@
+server: "http://cairn-server:8000"
+
+runtime:
+  interval: 3
+  max_workers: 8
+  max_running_projects: 3
+  max_project_workers: 4
+  healthcheck_timeout: 20
+  prompt_group: "default"
+
+tasks:
+  bootstrap:
+    timeout: 300
+    conclude_timeout: 90
+  reason:
+    timeout: 300
+    max_intents: 2
+  explore:
+    timeout: 300
+    conclude_timeout: 90
+
+execution:
+  backend: docker
+  work_dir: ".cairn-runtime"
+
+container:
+  image: "ghcr.io/oritera/cairn-worker-container:latest"
+  network_mode: "host"
+  completed_action: "stop"
+  # cap_add:
+  #   - "NET_RAW"
+  #   - "NET_ADMIN"
+
+common_env:
+  TSEC_SERVER_HOST: "10.0.0.44:8000"
+  TSEC_AGENT_TOKEN: "xxx"
+
+workers:
+  - name: "claudecode_deepseek-v4-pro"
+    type: "claudecode"
+    task_types: [bootstrap, reason, explore]
+    max_running: 2
+    priority: 0
+    env:
+      ANTHROPIC_MODEL: "deepseek-v4-pro"
+      ANTHROPIC_BASE_URL: "https://api.deepseek.com/anthropic"
+      ANTHROPIC_AUTH_TOKEN: "sk-your-deepseek-api-key"
+
+  - name: "codex_qwen3.6-plus"
+    type: "codex"
+    task_types: [bootstrap, reason, explore]
+    max_running: 2
+    priority: 0
+    env:
+      CODEX_MODEL: "qwen3.6-plus"
+      CODEX_BASE_URL: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+      OPENAI_API_KEY: "sk-your-dashscope-api-key"
+
+  - name: "pi_qwen3.6-plus"
+    type: "pi"
+    task_types: [bootstrap, reason, explore]
+    max_running: 2
+    priority: 0
+    env:
+      PI_MODEL: "qwen3.6-plus"
+      PI_BASE_URL: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+      PI_API_KEY: "sk-your-dashscope-api-key"
+      PI_PROVIDER_API: "openai-completions"
+      PI_MODEL_CONTEXT_WINDOW: "262144"

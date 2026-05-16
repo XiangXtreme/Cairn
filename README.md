@@ -130,8 +130,11 @@ Supported worker backends: **Claude Code**, **Codex**, and **Pi**.
 - Windows, macOS, or Linux
 - Python ≥ 3.12
 - Local worker CLIs on `PATH`, such as `claude`, `codex`, `pi`, `curl`, and `python`
+- Docker, only when using the Docker worker runtime
  
-### Manual
+### Local Runtime
+
+The default runtime executes worker processes directly on the host. This is the recommended path on Windows and the simplest path for local development.
  
 Edit `dispatch.yaml` and fill in your LLM endpoints and API keys, then:
  
@@ -146,7 +149,22 @@ uv run --project cairn cairn dispatch --config dispatch.yaml
 uv run --project cairn cairn dispatch --config dispatch.yaml --startup-healthcheck-only
 ```
 
-The dispatcher runs worker processes directly on the local machine. Runtime files, prompt snapshots, and per-project working directories are written under `.cairn-runtime/` by default.
+Runtime files, prompt snapshots, and per-project working directories are written under `.cairn-runtime/` by default.
+
+### Docker Runtime
+
+Linux deployments can run Cairn Server and Dispatcher with Docker Compose while the Dispatcher starts one worker container per Cairn project.
+
+Edit `dispatch_docker.yaml` and fill in your LLM endpoints and API keys, then:
+
+```bash
+docker pull --platform=linux/amd64 ghcr.io/oritera/cairn-worker-container:latest
+docker compose up --build
+```
+
+This starts `cairn-server` on port `8000` and `cairn-dispatcher` after the server health check passes. Dispatcher runtime files are persisted under `./datas/cairn-runtime/`.
+
+Use this mode when you want Linux worker isolation. Use the local runtime when you want direct access to host-installed `claude`, `codex`, or `pi` CLIs.
 
 ### Cairn Observer UI
 

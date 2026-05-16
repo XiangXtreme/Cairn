@@ -12,6 +12,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 TaskType = Literal["reason", "explore", "bootstrap"]
 WorkerType = Literal["claudecode", "codex", "pi", "mock"]
+ExecutionBackend = Literal["local", "docker"]
+CompletedAction = Literal["remove", "stop"]
 
 WORKER_ENV_KEYS: dict[WorkerType, tuple[str, ...]] = {
     "claudecode": (
@@ -147,7 +149,15 @@ class TasksConfig(BaseModel):
 
 
 class ExecutionConfig(BaseModel):
+    backend: ExecutionBackend = "local"
     work_dir: Path = Path(".cairn-runtime")
+
+
+class ContainerConfig(BaseModel):
+    image: str
+    network_mode: str = "host"
+    completed_action: CompletedAction = "stop"
+    cap_add: list[str] = Field(default_factory=list)
 
 
 class RuntimeConfig(BaseModel):
@@ -198,6 +208,7 @@ class DispatchConfig(BaseModel):
     runtime: RuntimeConfig
     tasks: TasksConfig
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
+    container: ContainerConfig | None = None
     common_env: dict[str, str] = Field(default_factory=dict)
     workers: list[WorkerConfig]
 
@@ -240,6 +251,8 @@ class DispatchConfig(BaseModel):
             raise ValueError("workers must not be empty")
         if self.runtime.max_project_workers > self.runtime.max_workers:
             raise ValueError("max_project_workers cannot exceed max_workers")
+        if self.execution.backend == "docker" and self.container is None:
+            raise ValueError("container config is required when execution.backend is docker")
         return self
 
     @classmethod
