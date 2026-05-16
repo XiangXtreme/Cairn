@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cairn vs Claude Code + MCP Skills</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #edf4ec;
+      --muted: #9aa99d;
+      --line: #2a3a32;
+      --surface: #0b110f;
+      --panel: #111a16;
+      --panel-2: #17231e;
+      --cairn: #56d0b7;
+      --cairn-soft: #132d28;
+      --agent: #d9b85f;
+      --agent-soft: #302915;
+      --accent: #ef7b56;
+      --accent-soft: #321d18;
+      --shadow: 0 22px 70px rgba(0, 0, 0, 0.42);
+      --radius: 8px;
+      --ease: cubic-bezier(.2,.8,.2,1);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--surface);
+      color: var(--ink);
+      font-family: "Aptos", "Segoe UI", "Microsoft YaHei", sans-serif;
+      letter-spacing: 0;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: -2;
+      pointer-events: none;
+      background:
+        radial-gradient(900px 540px at 18% -8%, rgba(86, 208, 183, 0.18), transparent 64%),
+        radial-gradient(760px 460px at 92% 2%, rgba(217, 184, 95, 0.13), transparent 62%),
+        radial-gradient(620px 420px at 50% 96%, rgba(239, 123, 86, 0.08), transparent 66%),
+        linear-gradient(180deg, #0d1512 0%, #0b110f 44%, #080d0b 100%);
+    }
+
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      opacity: .42;
+      background-image:
+        linear-gradient(rgba(237, 244, 236, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(237, 244, 236, 0.018) 1px, transparent 1px);
+      background-size: 100% 96px, 128px 100%;
+      mask-image: linear-gradient(180deg, transparent 0%, black 22%, black 76%, transparent 100%);
+    }
+
+    button, a { font: inherit; }
+
+    .shell {
+      width: min(1180px, calc(100vw - 36px));
+      margin: 0 auto;
+      padding: 34px 0 48px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 30px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .mark {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: var(--radius);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+      position: relative;
+    }
+
+    .mark::before,
+    .mark::after {
+      content: "";
+      position: absolute;
+      border: 2px solid var(--cairn);
+      border-radius: 999px;
+    }
+
+    .mark::before {
+      width: 18px;
+      height: 18px;
+    }
+
+    .mark::after {
+      width: 7px;
+      height: 7px;
+      background: var(--accent);
+      border-color: var(--accent);
+      transform: translate(11px, -8px);
+    }
+
+    .brand strong {
+      display: block;
+      font-size: 15px;
+      line-height: 1.1;
+    }
+
+    .brand span {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 3px;
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .nav button {
+      border: 1px solid var(--line);
+      background: rgba(17, 26, 22, 0.82);
+      color: var(--muted);
+      padding: 9px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: transform 180ms var(--ease), border-color 180ms var(--ease), color 180ms var(--ease), background 180ms var(--ease);
+    }
+
+    .nav button:hover,
+    .nav button:focus-visible {
+      color: var(--ink);
+      border-color: rgba(86, 208, 183, 0.55);
+      background: #16251f;
+      transform: translateY(-1px);
+      outline: none;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(360px, .95fr);
+      gap: 28px;
+      align-items: stretch;
+      margin-bottom: 28px;
+    }
+
+    .hero-copy {
+      padding: 32px 0 26px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--cairn);
+      font-weight: 700;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      margin-bottom: 18px;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 28px;
+      height: 2px;
+      background: var(--cairn);
+    }
+
+    h1 {
+      font-family: Georgia, "Times New Roman", "Microsoft YaHei", serif;
+      font-size: clamp(40px, 6vw, 82px);
+      line-height: .96;
+      margin: 0;
+      max-width: 820px;
+      letter-spacing: 0;
+      text-wrap: pretty;
+    }
+
+    .lede {
+      margin: 22px 0 0;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.75;
+      max-width: 720px;
+      text-wrap: pretty;
+    }
+
+    .hero-visual {
+      position: relative;
+      min-height: 420px;
+      border: 1px solid var(--line);
+      background:
+        radial-gradient(420px 260px at 20% 8%, rgba(86, 208, 183, .18), transparent 72%),
+        linear-gradient(145deg, rgba(20, 35, 30, .96), rgba(13, 20, 17, .92) 58%),
+        var(--panel);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      padding: 24px;
+    }
+
+    .diagram {
+      position: absolute;
+      inset: 24px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .lane {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      border: 1px solid rgba(237, 244, 236, .10);
+      background: rgba(12, 18, 15, .72);
+      border-radius: var(--radius);
+      padding: 18px;
+      overflow: hidden;
+    }
+
+    .lane h2 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.25;
+    }
+
+    .lane small {
+      color: var(--muted);
+      display: block;
+      margin-top: 6px;
+      line-height: 1.5;
+    }
+
+    .node-stack {
+      display: grid;
+      gap: 12px;
+      margin: 22px 0;
+    }
+
+    .node {
+      border: 1px solid var(--line);
+      background: #0e1713;
+      border-radius: var(--radius);
+      padding: 12px;
+      position: relative;
+      min-height: 54px;
+      transition: transform 220ms var(--ease), box-shadow 220ms var(--ease);
+    }
+
+    .node:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 14px 34px rgba(0, 0, 0, .32);
+    }
+
+    .node strong {
+      display: block;
+      font-size: 14px;
+    }
+
+    .node span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 4px;
+      line-height: 1.45;
+    }
+
+    .node.cairn {
+      border-color: rgba(25, 107, 93, .28);
+      background: var(--cairn-soft);
+    }
+
+    .node.agent {
+      border-color: rgba(95, 76, 35, .25);
+      background: var(--agent-soft);
+    }
+
+    .pipe {
+      display: grid;
+      grid-template-columns: 1fr 28px 1fr;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 8px;
+    }
+
+    .pipe::before,
+    .pipe::after {
+      content: "";
+      height: 1px;
+      background: var(--line);
+    }
+
+    .pulse {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 800;
+      animation: pulse 2.4s var(--ease) infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(183, 71, 42, .18); }
+      50% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(183, 71, 42, 0); }
+    }
+
+    .section {
+      margin-top: 28px;
+      padding: 28px;
+      border: 1px solid var(--line);
+      background: rgba(17, 26, 22, .86);
+      border-radius: var(--radius);
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.24);
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: end;
+      margin-bottom: 22px;
+    }
+
+    .section h2 {
+      margin: 0;
+      font-size: clamp(25px, 3vw, 38px);
+      line-height: 1.05;
+      font-family: Georgia, "Times New Roman", "Microsoft YaHei", serif;
+      letter-spacing: 0;
+    }
+
+    .section-head p {
+      margin: 0;
+      color: var(--muted);
+      max-width: 520px;
+      line-height: 1.65;
+      text-wrap: pretty;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .compare-panel {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: var(--radius);
+      padding: 22px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .compare-panel::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 5px;
+      background: var(--cairn);
+    }
+
+    .compare-panel.agent-side::before {
+      background: var(--agent);
+    }
+
+    .compare-panel h3 {
+      margin: 0;
+      font-size: 21px;
+    }
+
+    .compare-panel p {
+      margin: 12px 0 0;
+      color: var(--muted);
+      line-height: 1.72;
+      text-wrap: pretty;
+    }
+
+    .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 18px;
+    }
+
+    .tag {
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      color: #d7e3d7;
+      padding: 7px 9px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .matrix {
+      display: grid;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--panel);
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 180px 1fr 1fr;
+      min-height: 78px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .row:last-child { border-bottom: 0; }
+
+    .cell {
+      padding: 16px;
+      border-right: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .cell:last-child { border-right: 0; }
+
+    .cell.key {
+      background: var(--panel-2);
+      font-weight: 800;
+      color: #d7e3d7;
+    }
+
+    .cell b {
+      font-size: 14px;
+    }
+
+    .cell span {
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: 14px;
+    }
+
+    .header-row {
+      min-height: 56px;
+    }
+
+    .header-row .cell {
+      font-weight: 800;
+      color: #f8fcf8;
+      border-right-color: rgba(248,252,248,.16);
+    }
+
+    .header-row .cell:first-child {
+      background: #25322c;
+    }
+
+    .header-row .cell:nth-child(2) {
+      background: var(--cairn);
+    }
+
+    .header-row .cell:nth-child(3) {
+      background: var(--agent);
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+    }
+
+    .step {
+      min-height: 160px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: var(--radius);
+      padding: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .step::after {
+      content: attr(data-num);
+      position: absolute;
+      right: 12px;
+      bottom: -10px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 58px;
+      color: rgba(86, 208, 183, .12);
+      line-height: 1;
+    }
+
+    .step strong {
+      display: block;
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+
+    .step p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.62;
+      font-size: 14px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .verdict {
+      display: grid;
+      grid-template-columns: .8fr 1.2fr;
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .verdict-main {
+      background: #0e1713;
+      color: #f8fcf8;
+      border-radius: var(--radius);
+      padding: 24px;
+      min-height: 250px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .verdict-main h2 {
+      color: #f8fcf8;
+      max-width: 420px;
+    }
+
+    .verdict-main p {
+      color: rgba(237, 244, 236,.72);
+      line-height: 1.7;
+      margin: 18px 0 0;
+    }
+
+    .use-cases {
+      display: grid;
+      gap: 12px;
+    }
+
+    .case {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+      display: grid;
+      grid-template-columns: 124px 1fr;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .case b {
+      color: var(--cairn);
+    }
+
+    .case span {
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .footer-note {
+      margin: 18px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+      text-align: center;
+    }
+
+    @media (max-width: 920px) {
+      .hero,
+      .split,
+      .verdict {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-visual {
+        min-height: 560px;
+      }
+
+      .diagram {
+        grid-template-columns: 1fr;
+      }
+
+      .section-head {
+        display: block;
+      }
+
+      .section-head p {
+        margin-top: 10px;
+      }
+
+      .flow {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .row {
+        grid-template-columns: 1fr;
+      }
+
+      .cell {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .cell:last-child { border-bottom: 0; }
+    }
+
+    @media (max-width: 620px) {
+      .shell {
+        width: min(100vw - 24px, 1180px);
+        padding-top: 20px;
+      }
+
+      .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .nav {
+        justify-content: flex-start;
+      }
+
+      .hero-copy {
+        padding-top: 16px;
+      }
+
+      .section {
+        padding: 18px;
+      }
+
+      .flow {
+        grid-template-columns: 1fr;
+      }
+
+      .case {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="mark" aria-hidden="true"></div>
+        <div>
+          <strong>Cairn Architecture Note</strong>
+          <span>对比通用 Agent + MCP / Skills</span>
+        </div>
+      </div>
+      <nav class="nav" aria-label="页面导航">
+        <button data-target="position">定位差异</button>
+        <button data-target="matrix">能力矩阵</button>
+        <button data-target="flow">运行方式</button>
+        <button data-target="choice">怎么选</button>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <div class="hero-copy">
+        <div class="eyebrow">State-Space Search vs Tool-Augmented Agent</div>
+        <h1>Cairn 不是另一个 Agent，而是让多个 Agent 协同搜索的运行架构。</h1>
+        <p class="lede">
+          Claude Code 这类通用 Agent 搭配 MCP / Skills，重点是增强“单个智能体会做什么”。
+          Cairn 的重点是管理“多个智能体如何围绕同一个目标积累事实、声明方向、并发探索、收敛到完成”。
+        </p>
+      </div>
+
+      <div class="hero-visual" aria-label="两种架构示意">
+        <div class="diagram">
+          <article class="lane">
+            <div>
+              <h2>Cairn</h2>
+              <small>共享黑板 + 事实图 + 调度器</small>
+            </div>
+            <div class="node-stack">
+              <div class="node cairn"><strong>Origin / Goal</strong><span>问题被建模为起点到终点的搜索。</span></div>
+              <div class="pipe"><span class="pulse">→</span></div>
+              <div class="node cairn"><strong>Facts / Intents / Hints</strong><span>所有 Agent 通过图间接协作，不直接聊天。</span></div>
+              <div class="pipe"><span class="pulse">→</span></div>
+              <div class="node cairn"><strong>Bootstrap / Reason / Explore</strong><span>Dispatcher 统一派发任务并写回协议。</span></div>
+            </div>
+          </article>
+
+          <article class="lane">
+            <div>
+              <h2>Claude Code + MCP / Skills</h2>
+              <small>通用 Agent + 工具连接 + 专项能力</small>
+            </div>
+            <div class="node-stack">
+              <div class="node agent"><strong>User Task</strong><span>用户给一个目标或问题。</span></div>
+              <div class="pipe"><span class="pulse">→</span></div>
+              <div class="node agent"><strong>Agent Reasoning</strong><span>模型自主规划、调用工具、编辑文件或查询资源。</span></div>
+              <div class="pipe"><span class="pulse">→</span></div>
+              <div class="node agent"><strong>MCP / Skills</strong><span>扩展能访问什么、会使用哪些流程和工具。</span></div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="position">
+      <div class="section-head">
+        <h2>核心定位</h2>
+        <p>Cairn 解决的是协作搜索的状态管理问题；MCP 和 Skills 解决的是工具与工作流增强问题。它们不是同一层级的东西。</p>
+      </div>
+      <div class="split">
+        <article class="compare-panel">
+          <h3>Cairn：任务编排与状态空间搜索层</h3>
+          <p>
+            Cairn 把未知路径问题拆成可审计的图：Fact 是确认事实，Intent 是探索方向，Hint 是外部判断。
+            多个 worker 只围绕这张共享图行动，Dispatcher 负责认领、心跳、超时、本机进程、写回和收敛。
+          </p>
+          <div class="tag-row">
+            <span class="tag">多 Agent 并发</span>
+            <span class="tag">事实图审计</span>
+            <span class="tag">任务租约</span>
+            <span class="tag">工作区隔离</span>
+          </div>
+        </article>
+
+        <article class="compare-panel agent-side">
+          <h3>Claude Code + MCP / Skills：单 Agent 能力扩展层</h3>
+          <p>
+            通用 Agent 通过 MCP 连接外部系统，通过 Skills 获得特定领域的操作流程。
+            它更像一个能力很强的执行者：能读代码、调用工具、写文件、查资料，但长期共享状态通常依赖上下文、文件或外部系统。
+          </p>
+          <div class="tag-row">
+            <span class="tag">工具调用</span>
+            <span class="tag">本地代码修改</span>
+            <span class="tag">领域技能</span>
+            <span class="tag">交互式执行</span>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="matrix">
+      <div class="section-head">
+        <h2>能力矩阵</h2>
+        <p>真正的区别在于“谁负责记忆状态、谁负责协作、谁负责收敛”。</p>
+      </div>
+      <div class="matrix" role="table" aria-label="Cairn 与 Claude Code MCP Skills 对比">
+        <div class="row header-row" role="row">
+          <div class="cell" role="columnheader">维度</div>
+          <div class="cell" role="columnheader">Cairn</div>
+          <div class="cell" role="columnheader">Claude Code + MCP / Skills</div>
+        </div>
+        <div class="row" role="row">
+          <div class="cell key">目标层级</div>
+          <div class="cell"><b>解决“未知路径搜索”</b><span>从 origin 到 goal，不预设固定流程。</span></div>
+          <div class="cell"><b>解决“当前任务执行”</b><span>围绕用户当前指令进行规划、调用工具、产出结果。</span></div>
+        </div>
+        <div class="row" role="row">
+          <div class="cell key">状态管理</div>
+          <div class="cell"><b>显式状态</b><span>Facts、Intents、Hints 持久化在服务端，可回放、可审计。</span></div>
+          <div class="cell"><b>隐式或外部状态</b><span>依赖对话上下文、文件、工具返回、人工记录或外部项目系统。</span></div>
+        </div>
+        <div class="row" role="row">
+          <div class="cell key">协作方式</div>
+          <div class="cell"><b>Stigmergy 黑板协作</b><span>Agent 不直接沟通，通过共享图互相影响。</span></div>
+          <div class="cell"><b>单 Agent 主导</b><span>MCP / Skills 增强同一个 Agent 的能力；多 Agent 协作需额外系统设计。</span></div>
+        </div>
+        <div class="row" role="row">
+          <div class="cell key">工具关系</div>
+          <div class="cell"><b>工具是 worker 的执行环境</b><span>Dispatcher 只要求 worker 返回结构化结果。</span></div>
+          <div class="cell"><b>工具是 Agent 的能力边界</b><span>MCP 决定能连接哪些系统，Skills 决定擅长哪些流程。</span></div>
+        </div>
+        <div class="row" role="row">
+          <div class="cell key">失败处理</div>
+          <div class="cell"><b>协议级恢复</b><span>心跳超时释放 intent，任务可重派，失败不会污染事实图。</span></div>
+          <div class="cell"><b>会话级恢复</b><span>通常由 Agent 重新尝试、用户介入或工具自身报错处理。</span></div>
+        </div>
+        <div class="row" role="row">
+          <div class="cell key">典型场景</div>
+          <div class="cell"><b>授权渗透测试、CTF、漏洞研究、复杂探索</b><span>适合目标明确但路径未知、需要并发试探的问题。</span></div>
+          <div class="cell"><b>编码、调试、文档、运维、检索、自动化</b><span>适合明确任务和可直接调用工具完成的工作。</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="flow">
+      <div class="section-head">
+        <h2>Cairn 的运行方式</h2>
+        <p>它把通用 Agent 放进可控调度框架里，让 Agent 只做一件事：读任务、探索、返回结构化事实。</p>
+      </div>
+      <div class="flow">
+        <article class="step" data-num="01">
+          <strong>建模</strong>
+          <p>用户创建 Project，写入 origin 和 goal。问题从一开始就是可追踪的图。</p>
+        </article>
+        <article class="step" data-num="02">
+          <strong>派发</strong>
+          <p>Dispatcher 根据图状态选择 bootstrap、explore 或 reason。</p>
+        </article>
+        <article class="step" data-num="03">
+          <strong>执行</strong>
+          <p>Claude Code、Codex、Pi 等 worker 在项目工作区内执行具体探索。</p>
+        </article>
+        <article class="step" data-num="04">
+          <strong>写回</strong>
+          <p>Dispatcher 校验 JSON 输出，把结果写成 Fact、Intent 或 Complete。</p>
+        </article>
+        <article class="step" data-num="05">
+          <strong>收敛</strong>
+          <p>图增长后继续触发新探索，直到某些事实共同满足 goal。</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="choice">
+      <div class="verdict">
+        <div class="verdict-main">
+          <div>
+            <h2>一句话结论</h2>
+            <p>
+              MCP / Skills 让 Agent 更会用工具；Cairn 让一组 Agent 围绕同一个目标有组织地搜索、记账、并发和收敛。
+            </p>
+          </div>
+          <div class="tag-row">
+            <span class="tag">Cairn 可调度 Claude Code</span>
+            <span class="tag">不是替代关系</span>
+          </div>
+        </div>
+        <div class="use-cases">
+          <div class="case">
+            <b>用 Cairn</b>
+            <span>当任务像“从未知攻击面拿到 flag / shell / 证明”这样路径开放、需要多轮探索、并且希望保留完整因果链。</span>
+          </div>
+          <div class="case">
+            <b>用 Claude Code + MCP / Skills</b>
+            <span>当任务更像“修一个 bug、查一个接口、生成一个报告、调用某个系统完成操作”，目标清楚且主要依赖工具能力。</span>
+          </div>
+          <div class="case">
+            <b>组合使用</b>
+            <span>把 Claude Code 当作 Cairn 的 worker，再让它通过 MCP / Skills 获得更强工具能力；Cairn 负责全局调度和事实图。</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <p class="footer-note">
+      本页基于当前仓库 README、协议文档与 Dispatcher 源码整理；适合用于项目介绍、技术汇报或架构说明。
+    </p>
+  </main>
+
+  <script>
+    document.querySelectorAll("[data-target]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const target = document.getElementById(button.dataset.target);
+        if (!target) return;
+        const top = target.getBoundingClientRect().top + window.pageYOffset - 18;
+        window.scrollTo({ top, behavior: "smooth" });
+      });
+    });
+  </script>
+</body>
+</html>

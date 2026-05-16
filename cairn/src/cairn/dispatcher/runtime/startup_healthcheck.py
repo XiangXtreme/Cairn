@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 
 from cairn.dispatcher.config import DispatchConfig, WorkerConfig
-from cairn.dispatcher.runtime.containers import ContainerManager
+from cairn.dispatcher.runtime.local import LocalRuntimeManager
 from cairn.dispatcher.tasks.common import run_healthcheck
 from cairn.dispatcher.workers.registry import get_driver
 
@@ -27,11 +27,11 @@ class StartupHealthcheckResult:
 
 def run_startup_healthchecks(
     config: DispatchConfig,
-    container_manager: ContainerManager,
+    runtime_manager: LocalRuntimeManager,
     *,
     show_commands: bool = False,
 ) -> list[StartupHealthcheckResult]:
-    container_name = container_manager.create_startup_container()
+    workspace_name = runtime_manager.ensure_startup_workspace()
     workers = list(config.workers)
     parallelism = max(1, min(len(workers), config.runtime.max_workers, 8))
     LOG.info(
@@ -39,40 +39,35 @@ def run_startup_healthchecks(
         len(workers),
         parallelism,
     )
-    try:
-        with ThreadPoolExecutor(max_workers=parallelism) as executor:
-            future_map = {
-                executor.submit(
-                    _run_worker_healthcheck,
-                    container_manager,
-                    container_name,
-                    worker,
-                    config.runtime.healthcheck_timeout,
-                ): worker.name
-                for worker in workers
-            }
-            results: list[StartupHealthcheckResult] = []
-            for future in as_completed(future_map):
-                worker_name = future_map[future]
-                try:
-                    result = future.result()
-                except Exception:
-                    LOG.exception("startup healthcheck crashed worker=%s", worker_name)
-                    result = StartupHealthcheckResult(
-                        worker_name=worker_name,
-                        ok=False,
-                        returncode=1,
-                        duration_ms=0,
-                        http_status=None,
-                        response_preview="",
-                        stderr_preview="startup healthcheck crashed",
-                        command="-",
-                    )
-                results.append(result)
-    finally:
-        LOG.debug("removing startup healthcheck container container=%s", container_name)
-        container_manager.remove_container(container_name, force=True)
-
+    with ThreadPoolExecutor(max_workers=parallelism) as executor:
+        future_map = {
+            executor.submit(
+                _run_worker_healthcheck,
+                runtime_manager,
+                workspace_name,
+                worker,
+                config.runtime.healthcheck_timeout,
+            ): worker.name
+            for worker in workers
+        }
+        results: list[StartupHealthcheckResult] = []
+        for future in as_completed(future_map):
+            worker_name = future_map[future]
+            try:
+                result = future.result()
+            except Exception:
+                LOG.exception("startup healthcheck crashed worker=%s", worker_name)
+                result = StartupHealthcheckResult(
+                    worker_name=worker_name,
+                    ok=False,
+                    returncode=1,
+                    duration_ms=0,
+                    http_status=None,
+                    response_preview="",
+                    stderr_preview="startup healthcheck crashed",
+                    command="-",
+                )
+            results.append(result)
     results.sort(key=lambda result: result.worker_name)
     _log_report(results, show_commands=show_commands)
     return results
@@ -92,15 +87,15 @@ def format_failure_summary(results: list[StartupHealthcheckResult]) -> str:
 
 
 def _run_worker_healthcheck(
-    container_manager: ContainerManager,
-    container_name: str,
+    runtime_manager: LocalRuntimeManager,
+    workspace_name: str,
     worker: WorkerConfig,
     timeout_seconds: int,
 ) -> StartupHealthcheckResult:
     driver = get_driver(worker.type)
     healthcheck = run_healthcheck(
-        container_manager,
-        container_name,
+        runtime_manager,
+        workspace_name,
         worker,
         driver.build_startup_healthcheck(worker),
         timeout_seconds=timeout_seconds,

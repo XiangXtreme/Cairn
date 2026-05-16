@@ -1,43 +1,43 @@
 from __future__ import annotations
 
 import shlex
+import sys
 from dataclasses import dataclass
 
 
 _VERBOSE_CURL_SCRIPT = """
-url="$1"
-payload="$2"
-shift 2
+import subprocess
+import sys
+import tempfile
 
-body_file="$(mktemp)"
-cleanup() {
-    rm -f "$body_file"
-}
-trap cleanup EXIT
+url = sys.argv[1]
+payload = sys.argv[2]
+args = sys.argv[3:]
 
-curl_rc=0
-http_status="$(
-    curl -sS -o "$body_file" -w '%{http_code}' "$url" "$@" -d "$payload"
-)" || curl_rc=$?
+with tempfile.NamedTemporaryFile(delete=False) as body_file:
+    body_path = body_file.name
 
-printf 'http_status=%s\\n' "$http_status"
-if [ -s "$body_file" ]; then
-    cat "$body_file"
-fi
-
-if [ "$curl_rc" -ne 0 ]; then
-    exit "$curl_rc"
-fi
-
-case "$http_status" in
-    2??) exit 0 ;;
-    *) exit 1 ;;
-esac
+command = ["curl", "-sS", "-o", body_path, "-w", "%{http_code}", url, *args, "-d", payload]
+result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace")
+http_status = result.stdout.strip()
+print(f"http_status={http_status}")
+try:
+    with open(body_path, "r", encoding="utf-8", errors="replace") as handle:
+        body = handle.read()
+except OSError:
+    body = ""
+if body:
+    print(body, end="" if body.endswith("\\n") else "\\n")
+if result.stderr:
+    print(result.stderr, file=sys.stderr, end="" if result.stderr.endswith("\\n") else "\\n")
+if result.returncode != 0:
+    raise SystemExit(result.returncode)
+raise SystemExit(0 if http_status.startswith("2") else 1)
 """.strip()
 
 
 def build_verbose_curl_healthcheck(url: str, *, headers: list[str], payload: str) -> list[str]:
-    return ["/bin/sh", "-lc", _VERBOSE_CURL_SCRIPT, "--", url, payload, *headers]
+    return [sys.executable, "-c", _VERBOSE_CURL_SCRIPT, url, payload, *headers]
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,5 +64,5 @@ def _render_shell_argument(part: str | ShellArgument) -> str:
 
 
 def _double_quote_with_env_expansion(text: str) -> str:
-    escaped = text.replace("\\", "\\\\").replace('"', '\\"').replace("`", "\\`")
+    escaped = text.replace("\\", "\\\\").replace('"', '\\"')
     return f'"{escaped}"'

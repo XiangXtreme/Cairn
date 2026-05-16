@@ -3,3 +3,17 @@
 __pycache__/
 .playwright-cli/
 datas/
+.cairn-runtime/
+
+# Cairn observer local build/runtime artifacts
+observer/agentsview/agentsview
+observer/agentsview/agentsview.exe
+observer/agentsview/agentsv
+observer/agentsview/custom-gcl
+observer/agentsview/frontend/node_modules/
+observer/agentsview/frontend/test-results/
+observer/agentsview/frontend/playwright-report/
+observer/agentsview/tmp/
+observer/agentsview/data/
+observer/agentsview/sessions/
+observer/agentsview/html/

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from pathlib import PurePosixPath
+import pathlib
+import sys
 from typing import Any
 
 from cairn.dispatcher.config import WorkerConfig
@@ -111,13 +112,16 @@ class PiDriver(WorkerDriver):
 
     def _wrap_with_models(self, worker: WorkerConfig, pi_argv: list[str], *, enable_tools: bool = True) -> list[str]:
         script = (
-            'agent_dir="$1"\n'
-            'models_json="$2"\n'
-            "shift 2\n"
-            'mkdir -p "$agent_dir"\n'
-            'mkdir -p "$agent_dir/sessions"\n'
-            'printf "%s" "$models_json" > "$agent_dir/models.json"\n'
-            'exec env PI_CODING_AGENT_DIR="$agent_dir" pi "$@"\n'
+            "import os, pathlib, subprocess, sys\n"
+            "agent_dir = pathlib.Path(sys.argv[1])\n"
+            "models_json = sys.argv[2]\n"
+            "argv = sys.argv[3:]\n"
+            "agent_dir.mkdir(parents=True, exist_ok=True)\n"
+            "(agent_dir / 'sessions').mkdir(parents=True, exist_ok=True)\n"
+            "(agent_dir / 'models.json').write_text(models_json, encoding='utf-8')\n"
+            "env = os.environ.copy()\n"
+            "env['PI_CODING_AGENT_DIR'] = str(agent_dir)\n"
+            "raise SystemExit(subprocess.run(['pi', *argv], env=env).returncode)\n"
         )
         argv = [
             "--no-extensions",
@@ -129,10 +133,9 @@ class PiDriver(WorkerDriver):
         if enable_tools:
             argv.extend(["--tools", "read,write,edit,bash,grep,find,ls"])
         return [
-            "/bin/sh",
-            "-lc",
+            sys.executable,
+            "-c",
             script,
-            "--",
             self._agent_dir(worker),
             self._models_json(worker),
             *argv,
@@ -141,11 +144,11 @@ class PiDriver(WorkerDriver):
 
     @staticmethod
     def _agent_dir(worker: WorkerConfig) -> str:
-        return str(PurePosixPath("/tmp/cairn-pi") / worker.name)
+        return str(pathlib.Path(".cairn-pi") / worker.name)
 
     @staticmethod
     def _session_dir(worker: WorkerConfig) -> str:
-        return str(PurePosixPath(PiDriver._agent_dir(worker)) / "sessions")
+        return str(pathlib.Path(PiDriver._agent_dir(worker)) / "sessions")
 
     @staticmethod
     def _iter_events(stdout: str) -> list[dict[str, Any]]:

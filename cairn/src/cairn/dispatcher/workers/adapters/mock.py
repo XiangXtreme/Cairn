@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 
 from cairn.dispatcher.config import WorkerConfig, resolve_mock_behavior
 from cairn.dispatcher.workers.base import DriverResult, SeedSessionDriver
@@ -126,7 +127,7 @@ class MockDriver(SeedSessionDriver):
     @staticmethod
     def _argv(worker: WorkerConfig, prompt: str) -> list[str]:
         behavior = resolve_mock_behavior(worker.name, worker.env)
-        return ["python3", "-c", _SCRIPT, json.dumps(behavior, ensure_ascii=False), prompt]
+        return [sys.executable, "-c", _SCRIPT, json.dumps(behavior, ensure_ascii=False), prompt]
 
     def build_healthcheck(self, worker: WorkerConfig) -> list[str]:
         return self._argv(worker, '{"phase":"healthcheck"}')

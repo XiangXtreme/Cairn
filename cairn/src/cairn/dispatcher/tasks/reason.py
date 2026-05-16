@@ -13,15 +13,17 @@ from cairn.dispatcher.prompting import (
 )
 from cairn.dispatcher.protocol.client import CairnClient
 from cairn.dispatcher.runtime.cancellation import TaskCancellation
-from cairn.dispatcher.runtime.containers import ContainerManager
+from cairn.dispatcher.runtime.local import LocalRuntimeManager
 from cairn.dispatcher.runtime.heartbeat import HeartbeatLease
 from cairn.dispatcher.tasks.common import (
     best_effort_release_reason,
     cancel_reason,
     did_timeout,
+    finish_worker_run_record,
     preview,
     run_healthcheck,
     run_worker_process,
+    start_worker_run_record,
     write_graph_snapshot_reference,
 )
 from cairn.dispatcher.workers.registry import get_driver
@@ -33,7 +35,7 @@ LOG = logging.getLogger(__name__)
 def run_reason_task(
     config: DispatchConfig,
     client: CairnClient,
-    container_manager: ContainerManager,
+    runtime_manager: LocalRuntimeManager,
     project: ProjectDetail,
     export_yaml: str,
     worker: WorkerConfig,
@@ -45,17 +47,17 @@ def run_reason_task(
     lease = HeartbeatLease.for_reason(client, project.project.id, worker.name, config.runtime.interval)
     lease.start()
     try:
-        container_name = container_manager.ensure_running(project.project.id)
+        workspace_name = runtime_manager.ensure_running(project.project.id)
 
         LOG.info(
-            "starting container exec project=%s worker=%s phase=reason_healthcheck timeout=%ss",
+            "starting local process project=%s worker=%s phase=reason_healthcheck timeout=%ss",
             project.project.id,
             worker.name,
             healthcheck_timeout,
         )
         healthcheck = run_healthcheck(
-            container_manager,
-            container_name,
+            runtime_manager,
+            workspace_name,
             worker,
             driver.build_healthcheck(worker),
             timeout_seconds=healthcheck_timeout,
@@ -112,8 +114,8 @@ def run_reason_task(
             load_prompt(config.runtime.prompt_group, "reason.md"),
             {
                 "graph_yaml": write_graph_snapshot_reference(
-                    container_manager,
-                    container_name,
+                    runtime_manager,
+                    workspace_name,
                     export_yaml.strip(),
                     phase="reason_execute",
                 ),
@@ -125,10 +127,21 @@ def run_reason_task(
 
         session = driver.prepare_session()
         command = driver.build_execute(worker, prompt, session)
+        session = command.session
         execute_started = time.perf_counter()
+        run_record = start_worker_run_record(
+            runtime_manager,
+            project_id=project.project.id,
+            intent_id=None,
+            phase="reason_execute",
+            worker=worker,
+            agent_type=worker.type,
+            workspace_name=workspace_name,
+            session_id=session,
+        )
         result = run_worker_process(
-            container_manager,
-            container_name,
+            runtime_manager,
+            workspace_name,
             worker,
             command.argv,
             phase="reason_execute",
@@ -139,6 +152,7 @@ def run_reason_task(
         execute_ms = int((time.perf_counter() - execute_started) * 1000)
         total_ms = int((time.perf_counter() - task_started) * 1000)
         session = driver.extract_session(session, result.stdout, result.stderr)
+        finish_worker_run_record(runtime_manager, run_record, result, started=execute_started, session_id=session)
         cancelled = cancel_reason(result, cancellation)
         if cancelled is not None:
             LOG.info(

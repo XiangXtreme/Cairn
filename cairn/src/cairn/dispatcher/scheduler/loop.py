@@ -12,7 +12,7 @@ from cairn.dispatcher.config import DispatchConfig, WorkerConfig
 from cairn.dispatcher.models import ReasonCheckpoint, RunningTask
 from cairn.dispatcher.protocol.client import CairnClient
 from cairn.dispatcher.runtime.cancellation import TaskCancellation
-from cairn.dispatcher.runtime.containers import ContainerManager
+from cairn.dispatcher.runtime.local import LocalRuntimeManager
 from cairn.dispatcher.runtime.startup_healthcheck import format_failure_summary, run_startup_healthchecks
 from cairn.dispatcher.scheduler.worker_select import choose_worker
 from cairn.dispatcher.tasks.bootstrap import run_bootstrap_task
@@ -41,18 +41,14 @@ class DispatcherLoop:
         self.config_path = config_path
         self.config = DispatchConfig.load(config_path)
         self.client = CairnClient(self.config.server)
-        self.container_manager = ContainerManager(self.config.container)
+        self.runtime_manager = LocalRuntimeManager(self.config.execution)
         self.executor = ThreadPoolExecutor(max_workers=self.config.runtime.max_workers)
-        self.cleanup_executor = ThreadPoolExecutor(max_workers=max(1, min(8, self.config.runtime.max_workers)))
         self.futures: dict[Future[str], RunningTask] = {}
-        self.cleanup_futures: dict[Future[bool], tuple[str, str | None, str | None]] = {}
         self.reason_checkpoints: dict[str, ReasonCheckpoint] = {}
         self.runtime_project_ids: set[str] = set()
         self.worker_unhealthy_until: dict[str, float] = {}
         self.worker_rejected_until: dict[tuple[str, str, str], float] = {}
         self._log_state: dict[str, tuple[int, str, tuple[object, ...]]] = {}
-        self._cleanup_pending: set[str] = set()
-        self._inactive_cleanup_done: dict[str, str] = {}
         self.project_cursor = 0
         self._settings_checked = False
         self._startup_healthchecks_checked = False
@@ -65,8 +61,7 @@ class DispatcherLoop:
                 sorted({task.project_id for task in self.futures.values()}),
             )
         self.executor.shutdown(wait=True)
-        self.cleanup_executor.shutdown(wait=True)
-        self.container_manager.close()
+        self.runtime_manager.close()
         self.client.close()
 
     def run(self, once: bool = False) -> None:
@@ -78,12 +73,10 @@ class DispatcherLoop:
                         self._validate_server_settings()
                         self._settings_checked = True
                     self._reap_futures()
-                    self._reap_cleanup_futures()
                     summaries = self.client.list_projects()
                     self._initialize_reason_checkpoints(summaries)
                     self._refresh_runtime_projects(summaries)
                     self._cancel_inactive_tasks(summaries)
-                    self._queue_container_cleanups(summaries)
                     self._dispatch_available(summaries)
                 except requests.RequestException as exc:
                     if once:
@@ -178,16 +171,6 @@ class DispatcherLoop:
 
     def _try_dispatch_project(self, summary: ProjectSummary) -> bool:
         skip_scope = f"project:{summary.id}:skip"
-        container_name = self.container_manager.container_name(summary.id)
-        if container_name in self._cleanup_pending:
-            self._log_changed(
-                f"{skip_scope}:cleanup_pending",
-                logging.DEBUG,
-                "skip project=%s because container cleanup is still pending container=%s",
-                summary.id,
-                container_name,
-            )
-            return False
         if self._project_running_task_count(summary.id) >= self.config.runtime.max_project_workers:
             self._log_changed(
                 f"{skip_scope}:max_project_workers",
@@ -323,7 +306,7 @@ class DispatcherLoop:
                 run_reason_task,
                 self.config,
                 self.client,
-                self.container_manager,
+                self.runtime_manager,
                 project,
                 export_yaml,
                 worker,
@@ -390,7 +373,7 @@ class DispatcherLoop:
                 run_bootstrap_task,
                 self.config,
                 self.client,
-                self.container_manager,
+                self.runtime_manager,
                 project,
                 intent,
                 worker,
@@ -448,7 +431,7 @@ class DispatcherLoop:
                 run_explore_task,
                 self.config,
                 self.client,
-                self.container_manager,
+                self.runtime_manager,
                 project,
                 export_yaml,
                 intent,
@@ -695,66 +678,9 @@ class DispatcherLoop:
             except Exception:
                 LOG.exception("task crashed project=%s task=%s worker=%s", task.project_id, task.task_type, task.worker_name)
 
-    def _cleanup_completed_containers(self, summaries: list[ProjectSummary]) -> None:
-        for summary in summaries:
-            if summary.status != "completed":
-                continue
-            if self._inactive_cleanup_done.get(summary.id) == summary.status:
-                continue
-            container_name = self.container_manager.container_name(summary.id)
-            if container_name in self._cleanup_pending:
-                continue
-            if not self.container_manager.needs_completed_cleanup(summary.id):
-                self._inactive_cleanup_done[summary.id] = summary.status
-                continue
-            future = self.cleanup_executor.submit(self.container_manager.cleanup_completed, summary.id)
-            self.cleanup_futures[future] = (container_name, summary.id, summary.status)
-            self._cleanup_pending.add(container_name)
-
-    def _cleanup_stopped_containers(self, summaries: list[ProjectSummary]) -> None:
-        for summary in summaries:
-            if summary.status != "stopped":
-                continue
-            if self._inactive_cleanup_done.get(summary.id) == summary.status:
-                continue
-            container_name = self.container_manager.container_name(summary.id)
-            if container_name in self._cleanup_pending:
-                continue
-            if not self.container_manager.needs_stopped_cleanup(summary.id):
-                self._inactive_cleanup_done[summary.id] = summary.status
-                continue
-            future = self.cleanup_executor.submit(self.container_manager.cleanup_stopped, summary.id)
-            self.cleanup_futures[future] = (container_name, summary.id, summary.status)
-            self._cleanup_pending.add(container_name)
-
-    def _queue_container_cleanups(self, summaries: list[ProjectSummary]) -> None:
-        self._cleanup_completed_containers(summaries)
-        self._cleanup_stopped_containers(summaries)
-
-    def _reap_cleanup_futures(self) -> None:
-        done = [future for future in self.cleanup_futures if future.done()]
-        for future in done:
-            name, project_id, target_status = self.cleanup_futures.pop(future)
-            self._cleanup_pending.discard(name)
-            try:
-                success = future.result()
-                if success and project_id is not None and target_status in ("completed", "stopped"):
-                    self._inactive_cleanup_done[project_id] = target_status
-                elif project_id is not None:
-                    self._inactive_cleanup_done.pop(project_id, None)
-            except Exception:
-                if project_id is not None:
-                    self._inactive_cleanup_done.pop(project_id, None)
-                LOG.exception("container cleanup failed container=%s", name)
-
     def _refresh_runtime_projects(self, summaries: list[ProjectSummary]) -> None:
         active_ids = {summary.id for summary in summaries if summary.status == "active"}
         self.runtime_project_ids.intersection_update(active_ids)
-        inactive_status_by_id = {summary.id: summary.status for summary in summaries if summary.status != "active"}
-        for project_id, status in list(self._inactive_cleanup_done.items()):
-            current_status = inactive_status_by_id.get(project_id)
-            if current_status != status:
-                self._inactive_cleanup_done.pop(project_id, None)
 
     def _cancel_inactive_tasks(self, summaries: list[ProjectSummary]) -> None:
         status_by_project = {summary.id: summary.status for summary in summaries}
@@ -843,7 +769,7 @@ class DispatcherLoop:
             )
 
     def _run_startup_healthchecks(self, *, show_commands: bool) -> None:
-        results = run_startup_healthchecks(self.config, self.container_manager, show_commands=show_commands)
+        results = run_startup_healthchecks(self.config, self.runtime_manager, show_commands=show_commands)
         if any(result.ok for result in results):
             return
         raise RuntimeError(format_failure_summary(results))

@@ -87,11 +87,11 @@ System architecture:
           ┌─────────────────┴────────────────┐
           │             Dispatcher           │
           │   Schedules tasks, manages       │
-          │   containers, writes protocol    │
+          │   local workers, writes protocol │
           └──────────┬───────────────┬───────┘
                      │               │
      ┌───────────────┴──┐     ┌──────┴──────────────┐
-     │  Worker Container│     │  Worker Container   │
+     │ Project Workspace│     │ Project Workspace   │
      │   (Project A)    │     │   (Project B)       │
      │  ┌────┐  ┌────┐  │     │  ┌────┐  ┌────┐     │
      │  │ W. │  │ W. │  │     │  │ W. │  │ W. │     │
@@ -101,7 +101,7 @@ System architecture:
 
 **Cairn Server** maintains graph consistency only.
 
-**Cairn Dispatcher** reads the graph, schedules tasks, spins up and tears down worker containers, and is the sole writer to the protocol. Each project gets its own Worker Container; multiple Agent Workers run concurrently inside it. Agent Workers only receive a prompt and return structured output.
+**Cairn Dispatcher** reads the graph, schedules tasks, runs local worker processes, and is the sole writer to the protocol. Each project gets its own local workspace under `.cairn-runtime`; multiple Agent Workers can run concurrently from those workspaces. Agent Workers only receive a prompt and return structured output.
 
 Supported worker backends: **Claude Code**, **Codex**, and **Pi**.
 
@@ -127,34 +127,9 @@ Supported worker backends: **Claude Code**, **Codex**, and **Pi**.
 
 **Prerequisites**
  
-- macOS or Linux
+- Windows, macOS, or Linux
 - Python ≥ 3.12
-- Docker
-
-
-### Pull required images
- 
-Both setup methods require the worker container image:
- 
-```bash
-docker pull --platform=linux/amd64 ghcr.io/oritera/cairn-worker-container:latest
-```
- 
-### Docker Compose (recommended)
- 
-Pull the base image used to build Cairn:
- 
-```bash
-docker pull ghcr.io/astral-sh/uv:python3.13-trixie
-```
- 
-Edit `dispatch.yaml` and fill in your LLM endpoints and API keys, then start both services:
- 
-```bash
-docker compose up --build
-```
- 
-This starts `cairn-server` on port `8000` and `cairn-dispatcher` once the server passes its health check. The dispatcher mounts `dispatch.yaml` from the project root and connects to Docker via the host socket. Data is persisted to `./datas/cairn/`.
+- Local worker CLIs on `PATH`, such as `claude`, `codex`, `pi`, `curl`, and `python`
  
 ### Manual
  
@@ -169,6 +144,36 @@ uv run --project cairn cairn dispatch --config dispatch.yaml
  
 # Run startup health checks only
 uv run --project cairn cairn dispatch --config dispatch.yaml --startup-healthcheck-only
+```
+
+The dispatcher runs worker processes directly on the local machine. Runtime files, prompt snapshots, and per-project working directories are written under `.cairn-runtime/` by default.
+
+### Cairn Observer UI
+
+Cairn includes a local observer UI under `observer/agentsview`. It is a Cairn-scoped fork of agentsview: it reads only Cairn-generated worker session mappings from `.cairn-runtime/observer/runs`, groups sessions by Cairn project, and renders the original Claude Code / Codex style session view.
+
+On Windows:
+
+```powershell
+.\scripts\start-cairn-observer.ps1
+```
+
+On Linux or macOS:
+
+```bash
+./scripts/start-cairn-observer.sh
+```
+
+The script starts the UI at `http://127.0.0.1:8081/`, stores its SQLite data under `.cairn-runtime/agentsview-data`, and sets `CAIRN_ONLY=1` so non-Cairn local agent sessions are hidden. If the embedded frontend assets are missing after a fresh clone, the script builds them automatically from `observer/agentsview/frontend`.
+
+By default the script uses `cairn/.cairn-runtime` when that dispatcher runtime exists, then falls back to the repository-level `.cairn-runtime`. To point it at a different runtime directory:
+
+```powershell
+.\scripts\start-cairn-observer.ps1 -RuntimeDir .cairn-runtime
+```
+
+```bash
+./scripts/start-cairn-observer.sh --runtime-dir .cairn-runtime
 ```
 
 ## Disclaimer

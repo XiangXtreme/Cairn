@@ -12,16 +12,18 @@ from cairn.dispatcher.contracts import (
 from cairn.dispatcher.prompting import format_hints, load_prompt, render_prompt
 from cairn.dispatcher.protocol.client import CairnClient
 from cairn.dispatcher.runtime.cancellation import TaskCancellation
-from cairn.dispatcher.runtime.containers import ContainerManager
+from cairn.dispatcher.runtime.local import LocalRuntimeManager
 from cairn.dispatcher.runtime.heartbeat import HeartbeatLease
 from cairn.dispatcher.tasks.common import (
     best_effort_release,
     cancel_reason,
     did_timeout,
+    finish_worker_run_record,
     project_allows_conclude_fallback,
     preview,
     run_healthcheck,
     run_worker_process,
+    start_worker_run_record,
     write_conclude_result,
     write_conclude_result_with_fact_id,
 )
@@ -34,7 +36,7 @@ LOG = logging.getLogger(__name__)
 def run_bootstrap_task(
     config: DispatchConfig,
     client: CairnClient,
-    container_manager: ContainerManager,
+    runtime_manager: LocalRuntimeManager,
     project: ProjectDetail,
     intent: Intent,
     worker: WorkerConfig,
@@ -46,18 +48,18 @@ def run_bootstrap_task(
     lease = HeartbeatLease.for_intent(client, project.project.id, intent.id, worker.name, config.runtime.interval)
     lease.start()
     try:
-        container_name = container_manager.ensure_running(project.project.id)
+        workspace_name = runtime_manager.ensure_running(project.project.id)
 
         LOG.info(
-            "starting container exec project=%s intent=%s worker=%s phase=bootstrap_healthcheck timeout=%ss",
+            "starting local process project=%s intent=%s worker=%s phase=bootstrap_healthcheck timeout=%ss",
             project.project.id,
             intent.id,
             worker.name,
             healthcheck_timeout,
         )
         healthcheck = run_healthcheck(
-            container_manager,
-            container_name,
+            runtime_manager,
+            workspace_name,
             worker,
             driver.build_healthcheck(worker),
             timeout_seconds=healthcheck_timeout,
@@ -106,9 +108,19 @@ def run_bootstrap_task(
         execute = driver.build_execute(worker, prompt, session)
         session = execute.session
         execute_started = time.perf_counter()
+        run_record = start_worker_run_record(
+            runtime_manager,
+            project_id=project.project.id,
+            intent_id=intent.id,
+            phase="bootstrap",
+            worker=worker,
+            agent_type=worker.type,
+            workspace_name=workspace_name,
+            session_id=session,
+        )
         first = run_worker_process(
-            container_manager,
-            container_name,
+            runtime_manager,
+            workspace_name,
             worker,
             execute.argv,
             phase="bootstrap",
@@ -118,6 +130,7 @@ def run_bootstrap_task(
         )
         execute_ms = int((time.perf_counter() - execute_started) * 1000)
         session = driver.extract_session(session, first.stdout, first.stderr)
+        finish_worker_run_record(runtime_manager, run_record, first, started=execute_started, session_id=session)
         cancelled = cancel_reason(first, cancellation)
         if cancelled is not None:
             LOG.info(
@@ -161,8 +174,8 @@ def run_bootstrap_task(
                 return _try_conclude_fallback(
                     config,
                     client,
-                    container_manager,
-                    container_name,
+                    runtime_manager,
+                    workspace_name,
                     worker,
                     driver,
                     project,
@@ -208,8 +221,8 @@ def run_bootstrap_task(
             return _try_conclude_fallback(
                 config,
                 client,
-                container_manager,
-                container_name,
+                runtime_manager,
+                workspace_name,
                 worker,
                 driver,
                 project,
@@ -242,8 +255,8 @@ def run_bootstrap_task(
 def _try_conclude_fallback(
     config: DispatchConfig,
     client: CairnClient,
-    container_manager: ContainerManager,
-    container_name: str,
+    runtime_manager: LocalRuntimeManager,
+    workspace_name: str,
     worker: WorkerConfig,
     driver,
     project: ProjectDetail,
@@ -292,7 +305,7 @@ def _try_conclude_fallback(
         best_effort_release(client, project.project.id, intent.id, worker.name)
         return "failed"
 
-    container_name = container_manager.ensure_running(project.project.id)
+    workspace_name = runtime_manager.ensure_running(project.project.id)
 
     prompt = render_prompt(
         load_prompt(config.runtime.prompt_group, "bootstrap_conclude.md"),
@@ -301,9 +314,19 @@ def _try_conclude_fallback(
     conclude_argv = driver.build_conclude(worker, prompt, session)
     LOG.info("starting bootstrap conclude fallback project=%s intent=%s worker=%s", project.project.id, intent.id, worker.name)
     conclude_started = time.perf_counter()
+    run_record = start_worker_run_record(
+        runtime_manager,
+        project_id=project.project.id,
+        intent_id=intent.id,
+        phase="bootstrap_conclude",
+        worker=worker,
+        agent_type=worker.type,
+        workspace_name=workspace_name,
+        session_id=session,
+    )
     result = run_worker_process(
-        container_manager,
-        container_name,
+        runtime_manager,
+        workspace_name,
         worker,
         conclude_argv,
         phase="bootstrap_conclude",
@@ -312,6 +335,7 @@ def _try_conclude_fallback(
         cancellation=cancellation,
     )
     conclude_ms = int((time.perf_counter() - conclude_started) * 1000)
+    finish_worker_run_record(runtime_manager, run_record, result, started=conclude_started, session_id=session)
     cancelled = cancel_reason(result, cancellation)
     if cancelled is not None:
         LOG.info(

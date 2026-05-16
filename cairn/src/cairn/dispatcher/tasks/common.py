@@ -1,21 +1,23 @@
 from __future__ import annotations
 
+import json
 import logging
 import time
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import PurePath
 
 from cairn.dispatcher.config import WorkerConfig
 from cairn.dispatcher.protocol.client import CairnClient
 from cairn.dispatcher.runtime.cancellation import TaskCancellation
-from cairn.dispatcher.runtime.containers import ContainerManager
 from cairn.dispatcher.runtime.heartbeat import HeartbeatLease
+from cairn.dispatcher.runtime.local import LocalRuntimeManager
 from cairn.dispatcher.runtime.process import ProcessResult
 
-HEALTHCHECK_COMMUNICATE_GRACE_SECONDS = 10
-PROCESS_COMMUNICATE_GRACE_SECONDS = 15
 LOG_PREVIEW_LIMIT = 1200
-GRAPH_SNAPSHOT_ROOT = "/tmp/cairn-prompts"
+GRAPH_SNAPSHOT_ROOT = "prompts"
+OBSERVER_RUN_ROOT = "runs"
 LOG = logging.getLogger(__name__)
 
 
@@ -31,11 +33,121 @@ class ConcludeWriteResult:
     fact_id: str | None = None
 
 
+@dataclass(slots=True)
+class WorkerRunRecord:
+    run_id: str
+    project_id: str
+    intent_id: str | None
+    phase: str
+    worker_name: str
+    agent_type: str
+    workspace_name: str
+    workspace_path: str
+    session_id: str | None
+    status: str
+    started_at: str
+    updated_at: str
+    ended_at: str | None = None
+    exit_code: int | None = None
+    timed_out: bool = False
+    cancelled: bool = False
+    cancel_reason: str | None = None
+    duration_ms: int | None = None
+    stdout_preview: str = ""
+    stderr_preview: str = ""
+
+
 def preview(text: str, limit: int = LOG_PREVIEW_LIMIT) -> str:
     compact = " ".join(text.split())
     if len(compact) <= limit:
         return compact
     return compact[:limit] + "..."
+
+
+def now_utc_iso() -> str:
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def start_worker_run_record(
+    runtime_manager: LocalRuntimeManager,
+    *,
+    project_id: str,
+    intent_id: str | None,
+    phase: str,
+    worker: WorkerConfig,
+    agent_type: str,
+    workspace_name: str,
+    session_id: str | None,
+) -> WorkerRunRecord:
+    started_at = now_utc_iso()
+    record = WorkerRunRecord(
+        run_id=uuid.uuid4().hex,
+        project_id=project_id,
+        intent_id=intent_id,
+        phase=phase,
+        worker_name=worker.name,
+        agent_type=agent_type,
+        workspace_name=workspace_name,
+        workspace_path=str(runtime_manager.workspace_path(workspace_name)),
+        session_id=session_id,
+        status="running",
+        started_at=started_at,
+        updated_at=started_at,
+    )
+    write_worker_run_record(runtime_manager, record)
+    return record
+
+
+def finish_worker_run_record(
+    runtime_manager: LocalRuntimeManager,
+    record: WorkerRunRecord | None,
+    result: ProcessResult,
+    *,
+    started: float,
+    session_id: str | None = None,
+) -> None:
+    if record is None:
+        return
+    record.session_id = session_id or record.session_id
+    record.status = "cancelled" if result.cancelled else "timeout" if did_timeout(result) else "success" if result.returncode == 0 else "failed"
+    record.updated_at = now_utc_iso()
+    record.ended_at = record.updated_at
+    record.exit_code = result.returncode
+    record.timed_out = result.timed_out
+    record.cancelled = result.cancelled
+    record.cancel_reason = result.cancel_reason
+    record.duration_ms = int((time.perf_counter() - started) * 1000)
+    record.stdout_preview = preview(result.stdout)
+    record.stderr_preview = preview(result.stderr)
+    write_worker_run_record(runtime_manager, record)
+
+
+def write_worker_run_record(runtime_manager: LocalRuntimeManager, record: WorkerRunRecord) -> None:
+    payload = {
+        "schema_version": 1,
+        "run_id": record.run_id,
+        "project_id": record.project_id,
+        "intent_id": record.intent_id,
+        "phase": record.phase,
+        "worker_name": record.worker_name,
+        "agent_type": record.agent_type,
+        "workspace_name": record.workspace_name,
+        "workspace_path": record.workspace_path,
+        "session_id": record.session_id,
+        "status": record.status,
+        "started_at": record.started_at,
+        "updated_at": record.updated_at,
+        "ended_at": record.ended_at,
+        "exit_code": record.exit_code,
+        "timed_out": record.timed_out,
+        "cancelled": record.cancelled,
+        "cancel_reason": record.cancel_reason,
+        "duration_ms": record.duration_ms,
+        "stdout_preview": record.stdout_preview,
+        "stderr_preview": record.stderr_preview,
+    }
+    path = PurePath(OBSERVER_RUN_ROOT) / record.project_id / f"{record.run_id}.json"
+    runtime_manager.write_observer_text_file(str(path), json.dumps(payload, ensure_ascii=False, indent=2))
 
 
 def did_timeout(result: ProcessResult) -> bool:
@@ -50,21 +162,17 @@ def cancel_reason(result: ProcessResult, cancellation: TaskCancellation | None =
     return None
 
 
-def communicate_timeout(timeout_seconds: int, grace_seconds: int = PROCESS_COMMUNICATE_GRACE_SECONDS) -> int:
-    return timeout_seconds + grace_seconds
-
-
 def write_graph_snapshot_reference(
-    container_manager: ContainerManager,
-    container_name: str,
+    runtime_manager: LocalRuntimeManager,
+    workspace_name: str,
     graph_yaml: str,
     *,
     phase: str,
 ) -> str:
-    path = f"{GRAPH_SNAPSHOT_ROOT}/{phase}-{uuid.uuid4().hex[:12]}/graph.yaml"
-    container_manager.write_text_file(container_name, path, graph_yaml)
+    relative_path = str(PurePath(GRAPH_SNAPSHOT_ROOT) / f"{phase}-{uuid.uuid4().hex[:12]}" / "graph.yaml")
+    path = runtime_manager.write_text_file(workspace_name, relative_path, graph_yaml)
     return (
-        "The graph YAML snapshot is stored in this file inside the current container:\n\n"
+        "The graph YAML snapshot is stored in this file inside the current project workspace:\n\n"
         f"{path}\n\n"
         "Before using the graph, read the entire file and treat its contents as the YAML snapshot "
         "for this Graph section."
@@ -72,8 +180,8 @@ def write_graph_snapshot_reference(
 
 
 def run_healthcheck(
-    container_manager: ContainerManager,
-    container_name: str,
+    runtime_manager: LocalRuntimeManager,
+    workspace_name: str,
     worker: WorkerConfig,
     command: list[str],
     *,
@@ -81,8 +189,8 @@ def run_healthcheck(
     lease: HeartbeatLease | None = None,
     cancellation: TaskCancellation | None = None,
 ) -> HealthcheckRun:
-    process = container_manager.build_exec_process(
-        container_name,
+    process = runtime_manager.build_exec_process(
+        workspace_name,
         dict(worker.env),
         command,
         timeout_seconds=timeout_seconds,
@@ -94,7 +202,7 @@ def run_healthcheck(
         cancellation.attach_process(process)
     started = time.perf_counter()
     try:
-        result = process.communicate(timeout=communicate_timeout(timeout_seconds, HEALTHCHECK_COMMUNICATE_GRACE_SECONDS))
+        result = process.communicate(timeout=timeout_seconds)
     finally:
         if lease is not None:
             lease.attach_process(None)
@@ -105,8 +213,8 @@ def run_healthcheck(
 
 
 def run_worker_process(
-    container_manager: ContainerManager,
-    container_name: str,
+    runtime_manager: LocalRuntimeManager,
+    workspace_name: str,
     worker: WorkerConfig,
     argv: list[str],
     *,
@@ -116,14 +224,14 @@ def run_worker_process(
     cancellation: TaskCancellation | None = None,
 ) -> ProcessResult:
     LOG.info(
-        "starting container exec container=%s worker=%s phase=%s timeout=%ss",
-        container_name,
+        "starting local process workspace=%s worker=%s phase=%s timeout=%ss",
+        workspace_name,
         worker.name,
         phase,
         timeout_seconds,
     )
-    process = container_manager.build_exec_process(
-        container_name,
+    process = runtime_manager.build_exec_process(
+        workspace_name,
         dict(worker.env),
         argv,
         timeout_seconds=timeout_seconds,
@@ -134,7 +242,7 @@ def run_worker_process(
     if cancellation is not None:
         cancellation.attach_process(process)
     try:
-        return process.communicate(timeout=communicate_timeout(timeout_seconds))
+        return process.communicate(timeout=timeout_seconds)
     finally:
         if lease is not None:
             lease.attach_process(None)

@@ -12,7 +12,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 TaskType = Literal["reason", "explore", "bootstrap"]
 WorkerType = Literal["claudecode", "codex", "pi", "mock"]
-CompletedAction = Literal["remove", "stop"]
 
 WORKER_ENV_KEYS: dict[WorkerType, tuple[str, ...]] = {
     "claudecode": (
@@ -147,11 +146,8 @@ class TasksConfig(BaseModel):
     explore: ExploreTaskConfig
 
 
-class ContainerConfig(BaseModel):
-    image: str
-    network_mode: str
-    completed_action: CompletedAction
-    cap_add: list[str] = Field(default_factory=list)
+class ExecutionConfig(BaseModel):
+    work_dir: Path = Path(".cairn-runtime")
 
 
 class RuntimeConfig(BaseModel):
@@ -201,7 +197,7 @@ class DispatchConfig(BaseModel):
     server: str
     runtime: RuntimeConfig
     tasks: TasksConfig
-    container: ContainerConfig
+    execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
     common_env: dict[str, str] = Field(default_factory=dict)
     workers: list[WorkerConfig]
 
