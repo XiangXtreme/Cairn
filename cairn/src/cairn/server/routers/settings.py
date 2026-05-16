@@ -1,7 +1,8 @@
 from fastapi import APIRouter
 
+from cairn.server.dispatch_settings import read_dispatch_settings, write_dispatch_settings
 from cairn.server.db import get_conn
-from cairn.server.models import Settings
+from cairn.server.models import DispatchSettings, DispatchSettingsMode, Settings, UpdateDispatchSettingsRequest
 
 router = APIRouter(tags=["settings"])
 
@@ -21,3 +22,13 @@ def update_settings(body: Settings):
             (body.intent_timeout, body.reason_timeout),
         )
         return body
+
+
+@router.get("/settings/dispatch", response_model=DispatchSettings)
+def get_dispatch_settings(mode: DispatchSettingsMode | None = None):
+    return read_dispatch_settings(mode)
+
+
+@router.put("/settings/dispatch", response_model=DispatchSettings)
+def update_dispatch_settings(body: UpdateDispatchSettingsRequest):
+    return write_dispatch_settings(body)

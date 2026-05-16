@@ -43,6 +43,7 @@ class DispatcherLoop:
         self.client = CairnClient(self.config.server)
         self.runtime_manager = create_runtime_manager(self.config)
         self.executor = ThreadPoolExecutor(max_workers=self.config.runtime.max_workers)
+        self._retired_executors: list[ThreadPoolExecutor] = []
         self.futures: dict[Future[str], RunningTask] = {}
         self.reason_checkpoints: dict[str, ReasonCheckpoint] = {}
         self.runtime_project_ids: set[str] = set()
@@ -52,6 +53,7 @@ class DispatcherLoop:
         self.project_cursor = 0
         self._settings_checked = False
         self._startup_healthchecks_checked = False
+        self._config_mtime_ns = self._read_config_mtime_ns()
 
     def close(self) -> None:
         if self.futures:
@@ -61,6 +63,8 @@ class DispatcherLoop:
                 sorted({task.project_id for task in self.futures.values()}),
             )
         self.executor.shutdown(wait=True)
+        for executor in self._retired_executors:
+            executor.shutdown(wait=True)
         self.runtime_manager.close()
         self.client.close()
 
@@ -72,6 +76,7 @@ class DispatcherLoop:
                     if not self._settings_checked:
                         self._validate_server_settings()
                         self._settings_checked = True
+                    self._reload_config_if_changed()
                     self._reap_futures()
                     summaries = self.client.list_projects()
                     self._initialize_reason_checkpoints(summaries)
@@ -93,6 +98,69 @@ class DispatcherLoop:
                 time.sleep(self.config.runtime.interval)
         finally:
             self.close()
+
+    def _read_config_mtime_ns(self) -> int:
+        try:
+            return self.config_path.stat().st_mtime_ns
+        except FileNotFoundError:
+            return 0
+
+    def _reload_config_if_changed(self) -> None:
+        current_mtime_ns = self._read_config_mtime_ns()
+        if current_mtime_ns == self._config_mtime_ns:
+            return
+        old_config = self.config
+        old_runtime_manager = self.runtime_manager
+        try:
+            new_config = DispatchConfig.load(self.config_path)
+            runtime_changed = old_config.execution != new_config.execution or old_config.container != new_config.container
+            new_runtime_manager = create_runtime_manager(new_config) if runtime_changed else old_runtime_manager
+        except Exception:
+            LOG.exception("dispatch config reload failed path=%s; keeping previous config", self.config_path)
+            self._config_mtime_ns = current_mtime_ns
+            return
+
+        self.config = new_config
+        if old_config.server != new_config.server:
+            self.client.close()
+            self.client = CairnClient(new_config.server)
+        self.runtime_manager = new_runtime_manager
+        if new_runtime_manager is not old_runtime_manager:
+            old_runtime_manager.close()
+        self._config_mtime_ns = current_mtime_ns
+        self._settings_checked = False
+        self._log_state.clear()
+        self._prune_worker_reload_state()
+        self._refresh_executor_if_needed(old_config.runtime.max_workers, new_config.runtime.max_workers)
+        LOG.info(
+            "dispatch config hot reloaded path=%s workers=%s max_workers=%s interval=%s prompt_group=%s",
+            self.config_path,
+            [worker.name for worker in new_config.workers],
+            new_config.runtime.max_workers,
+            new_config.runtime.interval,
+            new_config.runtime.prompt_group,
+        )
+
+    def _refresh_executor_if_needed(self, old_max_workers: int, new_max_workers: int) -> None:
+        if old_max_workers == new_max_workers:
+            return
+        old_executor = self.executor
+        self.executor = ThreadPoolExecutor(max_workers=new_max_workers)
+        self._retired_executors.append(old_executor)
+        old_executor.shutdown(wait=False)
+
+    def _prune_worker_reload_state(self) -> None:
+        worker_names = {worker.name for worker in self.config.workers}
+        self.worker_unhealthy_until = {
+            worker_name: until
+            for worker_name, until in self.worker_unhealthy_until.items()
+            if worker_name in worker_names
+        }
+        self.worker_rejected_until = {
+            key: until
+            for key, until in self.worker_rejected_until.items()
+            if key[2] in worker_names
+        }
 
     def run_startup_healthchecks_only(self) -> None:
         try:

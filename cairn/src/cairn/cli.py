@@ -5,6 +5,7 @@ import uvicorn
 
 from cairn.dispatcher.logging import configure_logging
 from cairn.dispatcher.scheduler.loop import DispatcherLoop
+from cairn.server.dispatch_settings import resolve_dispatch_settings_mode, resolve_dispatch_settings_path
 from cairn.server import db
 
 
@@ -44,8 +45,14 @@ def serve(host: str, port: int, db_path: str, log_level: str, access_log: bool):
     "--config",
     "config_path",
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    required=True,
+    required=False,
     help="Dispatcher config path",
+)
+@click.option(
+    "--config-mode",
+    type=click.Choice(["file", "ui"]),
+    default=None,
+    help="Dispatcher config source. Defaults to CAIRN_DISPATCH_SETTINGS_MODE or file.",
 )
 @click.option("--once", is_flag=True, help="Run one scheduling iteration and exit")
 @click.option(
@@ -54,9 +61,12 @@ def serve(host: str, port: int, db_path: str, log_level: str, access_log: bool):
     help="Run startup worker healthchecks and exit",
 )
 @click.option("--log-level", default="INFO", show_default=True, help="Log level")
-def dispatch(config_path: Path, once: bool, startup_healthcheck_only: bool, log_level: str):
+def dispatch(config_path: Path | None, config_mode: str | None, once: bool, startup_healthcheck_only: bool, log_level: str):
     """Run the Cairn dispatcher."""
     configure_logging(log_level, bare=startup_healthcheck_only)
+    if config_path is None:
+        resolved_mode = resolve_dispatch_settings_mode(config_mode)
+        config_path = resolve_dispatch_settings_path(resolved_mode, create_ui=resolved_mode == "ui")
     loop = DispatcherLoop(config_path)
     try:
         if startup_healthcheck_only:

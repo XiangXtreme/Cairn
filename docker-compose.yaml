@@ -9,6 +9,11 @@ services:
       - "8000:8000"
     volumes:
       - ./datas/cairn/:/root/.local/share/cairn/
+      - ./dispatch_docker.yaml:/cairn/dispatch.yaml
+    environment:
+      CAIRN_DISPATCH_CONFIG: /cairn/dispatch.yaml
+      CAIRN_UI_DISPATCH_CONFIG: /root/.local/share/cairn/dispatch_ui.yaml
+      CAIRN_DISPATCH_SETTINGS_MODE: ${CAIRN_DISPATCH_SETTINGS_MODE:-file}
     healthcheck:
       test:
         - "CMD"
@@ -31,12 +36,17 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./dispatch_docker.yaml:/cairn/dispatch.yaml:ro
+      - ./datas/cairn/:/root/.local/share/cairn/
       - ./datas/cairn-runtime:/cairn/.cairn-runtime
+    environment:
+      CAIRN_DISPATCH_CONFIG: /cairn/dispatch.yaml
+      CAIRN_UI_DISPATCH_CONFIG: /root/.local/share/cairn/dispatch_ui.yaml
+      CAIRN_DISPATCH_SETTINGS_MODE: ${CAIRN_DISPATCH_SETTINGS_MODE:-file}
     depends_on:
       cairn-server:
         condition: service_healthy
     restart: unless-stopped
-    command: ["uv", "run", "cairn", "dispatch", "--config", "dispatch.yaml"]
+    command: ["uv", "run", "cairn", "dispatch"]
 
   cairn-observer:
     image: debian:bookworm-slim

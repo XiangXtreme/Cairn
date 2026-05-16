@@ -4,10 +4,68 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from cairn.dispatcher.config import TaskType, WorkerType
+
+
+DispatchSettingsMode = Literal["file", "ui"]
+
 
 class Settings(BaseModel):
     intent_timeout: int = Field(ge=5)
     reason_timeout: int = Field(ge=5)
+
+
+class DispatchRuntimeSettings(BaseModel):
+    interval: int = Field(gt=0)
+    max_workers: int = Field(gt=0)
+    max_running_projects: int = Field(gt=0)
+    max_project_workers: int = Field(gt=0)
+    healthcheck_timeout: int = Field(gt=0)
+    prompt_group: str = Field(min_length=1)
+
+
+class DispatchWorkerSettings(BaseModel):
+    source_name: str = ""
+    name: str
+    type: WorkerType
+    task_types: list[TaskType]
+    max_running: int = Field(gt=0)
+    priority: int = Field(ge=0)
+    model: str = ""
+    base_url: str = ""
+    auth_token: str = ""
+    has_auth_token: bool = False
+    provider_api: str = ""
+    context_window: int | None = Field(default=None, gt=0)
+
+    @field_validator("name", "model", "base_url", "auth_token", "provider_api")
+    @classmethod
+    def normalize_worker_text(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("task_types")
+    @classmethod
+    def validate_task_types_non_empty(cls, value: list[TaskType]) -> list[TaskType]:
+        if not value:
+            raise ValueError("task_types must not be empty")
+        if len(set(value)) != len(value):
+            raise ValueError("task_types must be unique")
+        return value
+
+
+class DispatchSettings(BaseModel):
+    mode: DispatchSettingsMode = "file"
+    path: str
+    writable: bool
+    runtime: DispatchRuntimeSettings
+    workers: list[DispatchWorkerSettings]
+    restart_required: bool = True
+
+
+class UpdateDispatchSettingsRequest(BaseModel):
+    mode: DispatchSettingsMode = "file"
+    runtime: DispatchRuntimeSettings
+    workers: list[DispatchWorkerSettings]
 
 
 class Fact(BaseModel):
