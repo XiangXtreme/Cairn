@@ -390,11 +390,11 @@
   .session-item {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
     width: 100%;
-    height: 42px;
-    padding: 0 10px;
-    padding-right: 10px;
+    height: 48px;
+    padding: 0 12px;
+    padding-right: 12px;
     text-align: left;
     transition: background 0.1s;
     user-select: none;
@@ -404,8 +404,8 @@
   }
 
   .session-item.compact {
-    height: 34px;
-    gap: 4px;
+    height: 38px;
+    gap: 5px;
   }
 
   .session-item.depth-1,
@@ -476,7 +476,7 @@
 
   /* Agent tag on the right side */
   .agent-tag {
-    font-size: 8px;
+    font-size: 9px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.02em;
@@ -489,7 +489,7 @@
   }
 
   .machine-tag {
-    font-size: 9px;
+    font-size: 10px;
     line-height: 1;
     color: var(--text-muted);
     opacity: 0.9;
@@ -505,8 +505,8 @@
   }
 
   .session-name {
-    font-size: 12px;
-    font-weight: 450;
+    font-size: 13px;
+    font-weight: 500;
     color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
@@ -526,12 +526,12 @@
   }
 
   .compact .session-name {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-secondary);
   }
 
   .rename-input {
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 450;
     color: var(--text-primary);
     background: var(--bg-surface-hover);
@@ -546,15 +546,15 @@
   .session-meta {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 10px;
+    gap: 7px;
+    font-size: 11px;
     color: var(--text-muted);
     line-height: 1.3;
     letter-spacing: 0.01em;
   }
 
   .compact .session-meta {
-    font-size: 9px;
+    font-size: 10px;
   }
 
   .session-project {

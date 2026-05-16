@@ -37,3 +37,40 @@ services:
         condition: service_healthy
     restart: unless-stopped
     command: ["uv", "run", "cairn", "dispatch", "--config", "dispatch.yaml"]
+
+  cairn-observer:
+    image: debian:bookworm-slim
+    container_name: cairn-observer
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./observer/agentsview:/src
+      - ./datas/cairn-runtime:/runtime
+      - ./datas/cairn:/cairn-data:ro
+      - cairn-worker-sessions:/cairn-observer-sessions
+    working_dir: /src
+    environment:
+      CAIRN_ONLY: "1"
+      CAIRN_RUNS_DIR: /runtime/observer/runs
+      CAIRN_DB_PATH: /cairn-data/cairn.db
+      AGENTSVIEW_DATA_DIR: /runtime/agentsview-data
+      CLAUDE_PROJECTS_DIR: /cairn-observer-sessions/.claude/projects
+      CODEX_SESSIONS_DIR: /cairn-observer-sessions/.codex/sessions
+      PI_DIR: /cairn-observer-sessions/.pi/agent/sessions
+    depends_on:
+      cairn-server:
+        condition: service_healthy
+    restart: unless-stopped
+    command:
+      - ./agentsview
+      - serve
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8081"
+      - --no-browser
+      - --require-auth
+
+volumes:
+  cairn-worker-sessions:
+    external: true

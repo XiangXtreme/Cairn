@@ -628,11 +628,11 @@
   .group-header {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 7px;
     width: 100%;
-    height: 28px;
-    padding: 0 10px;
-    font-size: 10px;
+    height: 32px;
+    padding: 0 12px;
+    font-size: 11px;
     font-weight: 600;
     color: var(--text-muted);
     text-transform: none;
@@ -645,7 +645,7 @@
   }
 
   .group-header.cairn-folder {
-    height: 30px;
+    height: 32px;
     background: color-mix(in srgb, var(--bg-inset) 85%, var(--accent-blue, #7dcfff) 7%);
   }
 
@@ -677,6 +677,8 @@
   .project-icon {
     flex-shrink: 0;
     color: var(--text-muted);
+    width: 12px;
+    height: 12px;
   }
 
   .group-name {
@@ -700,7 +702,7 @@
 
   .group-count {
     flex-shrink: 0;
-    font-size: 9px;
+    font-size: 10px;
     font-weight: 500;
     color: var(--text-muted);
     background: var(--bg-surface);
@@ -713,10 +715,10 @@
   .sub-group-header {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
     width: 100%;
-    height: 28px;
-    font-size: 11px;
+    height: 30px;
+    font-size: 12px;
     color: var(--text-muted);
     cursor: pointer;
     user-select: none;

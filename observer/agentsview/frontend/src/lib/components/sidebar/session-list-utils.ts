@@ -1,10 +1,10 @@
 import type { Session } from "../../api/types.js";
 import type { SessionGroup } from "../../stores/sessions.svelte.js";
 
-export const ITEM_HEIGHT = 42;
-export const CHILD_ITEM_HEIGHT = 34;
-export const TEAM_HEADER_HEIGHT = 28;
-export const HEADER_HEIGHT = 28;
+export const ITEM_HEIGHT = 48;
+export const CHILD_ITEM_HEIGHT = 38;
+export const TEAM_HEADER_HEIGHT = 30;
+export const HEADER_HEIGHT = 32;
 export const OVERSCAN = 10;
 export const STORAGE_KEY = "agentsview-group-by-agent";
 export const STORAGE_KEY_GROUP = "agentsview-group-mode";

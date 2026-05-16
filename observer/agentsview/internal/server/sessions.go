@@ -91,6 +91,10 @@ func (s *Server) handleListSessions(
 		Limit:            limit,
 		Termination:      q.Get("termination"),
 	}
+	if cairnOnlyEnabled() {
+		filter.IncludeOneShot = true
+		filter.IncludeAutomated = true
+	}
 	if v := q.Get("min_tool_failures"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil {
