@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import pathlib
-import sys
 from typing import Any
 
 from cairn.dispatcher.config import WorkerConfig
@@ -133,7 +132,7 @@ class PiDriver(WorkerDriver):
         if enable_tools:
             argv.extend(["--tools", "read,write,edit,bash,grep,find,ls"])
         return [
-            sys.executable,
+            "python",
             "-c",
             script,
             self._agent_dir(worker),
@@ -148,6 +147,8 @@ class PiDriver(WorkerDriver):
 
     @staticmethod
     def _session_dir(worker: WorkerConfig) -> str:
+        if pi_dir := worker.env.get("PI_DIR"):
+            return str(pathlib.Path(pi_dir) / worker.name)
         return str(pathlib.Path(PiDriver._agent_dir(worker)) / "sessions")
 
     @staticmethod

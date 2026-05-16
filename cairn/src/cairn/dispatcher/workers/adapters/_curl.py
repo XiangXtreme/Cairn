@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import shlex
-import sys
 from dataclasses import dataclass
 
 
@@ -37,7 +36,7 @@ raise SystemExit(0 if http_status.startswith("2") else 1)
 
 
 def build_verbose_curl_healthcheck(url: str, *, headers: list[str], payload: str) -> list[str]:
-    return [sys.executable, "-c", _VERBOSE_CURL_SCRIPT, url, payload, *headers]
+    return ["python", "-c", _VERBOSE_CURL_SCRIPT, url, payload, *headers]
 
 
 @dataclass(frozen=True, slots=True)

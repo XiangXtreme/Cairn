@@ -27,6 +27,8 @@ container:
   image: "ghcr.io/oritera/cairn-worker-container:latest"
   network_mode: "host"
   completed_action: "stop"
+  session_volume: "cairn-worker-sessions"
+  session_home: "/cairn-observer-sessions"
   # cap_add:
   #   - "NET_RAW"
   #   - "NET_ADMIN"
@@ -34,6 +36,7 @@ container:
 common_env:
   TSEC_SERVER_HOST: "10.0.0.44:8000"
   TSEC_AGENT_TOKEN: "xxx"
+  PI_DIR: "/cairn-observer-sessions/.pi/agent/sessions"
 
 workers:
   - name: "claudecode_deepseek-v4-pro"

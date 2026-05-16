@@ -158,6 +158,8 @@ class ContainerConfig(BaseModel):
     network_mode: str = "host"
     completed_action: CompletedAction = "stop"
     cap_add: list[str] = Field(default_factory=list)
+    session_volume: str = "cairn-worker-sessions"
+    session_home: str = "/cairn-observer-sessions"
 
 
 class RuntimeConfig(BaseModel):

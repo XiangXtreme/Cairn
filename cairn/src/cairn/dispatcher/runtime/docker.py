@@ -29,6 +29,7 @@ class DockerRuntimeManager:
         self._root = execution.work_dir.resolve()
         self._observer_root = self._root / "observer"
         self._client = docker.from_env()
+        self._session_home = PurePosixPath(container.session_home)
         self._ensure_running_locks: dict[str, threading.Lock] = {}
         self._ensure_running_locks_guard = threading.Lock()
         self._startup_containers: list[str] = []
@@ -61,6 +62,7 @@ class DockerRuntimeManager:
                 name=container_name,
                 network_mode=self._config.network_mode,
                 cap_add=self._config.cap_add or None,
+                volumes=self._session_volumes(),
             )
         except DockerException as exc:
             raise RuntimeError(f"failed to create startup container {container_name}: {exc}") from exc
@@ -76,6 +78,7 @@ class DockerRuntimeManager:
     ) -> DockerManagedProcess:
         container = self._require_workspace_container(workspace_name)
         self._ensure_container_dir(container, self.workspace_path(workspace_name))
+        env = self._with_session_env(env)
         argv: list[str] = []
         if timeout_seconds is not None:
             argv.extend(["timeout", "-k", "5s", f"{timeout_seconds}s"])
@@ -182,6 +185,7 @@ class DockerRuntimeManager:
                 name=name,
                 network_mode=self._config.network_mode,
                 cap_add=self._config.cap_add or None,
+                volumes=self._session_volumes(),
             )
             LOG.info("created container project=%s container=%s", project_id, name)
             return name
@@ -231,6 +235,22 @@ class DockerRuntimeManager:
             container.start()
         except DockerException as exc:
             raise RuntimeError(f"failed to start container {name}: {exc}") from exc
+
+    def _with_session_env(self, env: dict[str, str]) -> dict[str, str]:
+        merged = dict(env)
+        merged.setdefault("HOME", str(self._session_home))
+        merged.setdefault("CLAUDE_PROJECTS_DIR", str(self._session_home / ".claude" / "projects"))
+        merged.setdefault("CODEX_SESSIONS_DIR", str(self._session_home / ".codex" / "sessions"))
+        merged.setdefault("PI_DIR", str(self._session_home / ".pi" / "agent" / "sessions"))
+        return merged
+
+    def _session_volumes(self) -> dict[str, dict[str, str]]:
+        return {
+            self._config.session_volume: {
+                "bind": str(self._session_home),
+                "mode": "rw",
+            }
+        }
 
     def _stop_container(self, container: Container, name: str) -> bool:
         try:
