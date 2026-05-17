@@ -1288,6 +1288,57 @@ describe("buildSessionGroups", () => {
     expect(groups[1]!.sessions).toHaveLength(1);
   });
 
+  it("keeps cairn project sessions as separate groups when they are unrelated", () => {
+    const sessions = [
+      makeSession({
+        id: "c1",
+        project: "cairn:proj_033",
+        started_at: "2024-01-01T00:00:00Z",
+        ended_at: "2024-01-01T00:10:00Z",
+      }),
+      makeSession({
+        id: "c2",
+        project: "cairn:proj_033",
+        started_at: "2024-01-01T00:20:00Z",
+        ended_at: "2024-01-01T00:30:00Z",
+      }),
+      makeSession({
+        id: "c3",
+        project: "cairn:proj_033",
+        started_at: "2024-01-01T00:40:00Z",
+        ended_at: "2024-01-01T00:50:00Z",
+      }),
+    ];
+
+    const groups = buildSessionGroups(sessions);
+    expect(groups).toHaveLength(3);
+    expect(groups.every((g) => g.project === "cairn:proj_033")).toBe(true);
+    expect(groups.every((g) => g.sessions.length === 1)).toBe(true);
+  });
+
+  it("keeps linked cairn project sessions as separate groups", () => {
+    const sessions = [
+      makeSession({
+        id: "c1",
+        project: "cairn:proj_033",
+        started_at: "2024-01-01T00:00:00Z",
+        ended_at: "2024-01-01T00:10:00Z",
+      }),
+      makeSession({
+        id: "c2",
+        project: "cairn:proj_033",
+        parent_session_id: "c1",
+        started_at: "2024-01-01T00:20:00Z",
+        ended_at: "2024-01-01T00:30:00Z",
+      }),
+    ];
+
+    const groups = buildSessionGroups(sessions);
+    expect(groups).toHaveLength(2);
+    expect(groups.every((g) => g.project === "cairn:proj_033")).toBe(true);
+    expect(groups.every((g) => g.sessions.length === 1)).toBe(true);
+  });
+
   it("missing middle link creates separate groups", () => {
     // Chain: s1 -> s2 -> s3, but s2 is not in the loaded set
     const sessions = [

@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 
 from cairn.server.db import get_conn
 from cairn.server.models import (
+    CloneProjectRequest,
     CompleteRequest,
     CreateProjectRequest,
     Fact,
@@ -22,6 +23,7 @@ from cairn.server.services import (
     check_project_completed,
     check_project_active,
     clear_project_reason,
+    delete_project_artifacts,
     expire_reason_leases,
     expire_workers,
     get_completion_intent_or_409,
@@ -113,6 +115,69 @@ def create_project(body: CreateProjectRequest):
         )
 
 
+@router.post("/projects/{project_id}/clone", response_model=ProjectDetail, status_code=201)
+def clone_project(project_id: str, body: CloneProjectRequest):
+    with get_conn() as conn:
+        source = get_project_or_404(conn, project_id)
+        facts = conn.execute(
+            "SELECT * FROM facts WHERE project_id = ? ORDER BY id",
+            (project_id,),
+        ).fetchall()
+        hints = conn.execute(
+            "SELECT * FROM hints WHERE project_id = ? ORDER BY created_at, id",
+            (project_id,),
+        ).fetchall()
+
+        fact_map = {row["id"]: row["description"] for row in facts}
+        origin = fact_map.get("origin")
+        goal = fact_map.get("goal")
+        if origin is None or goal is None:
+            raise HTTPException(409, "Project is missing origin or goal and cannot be cloned")
+
+        pid = next_project_id(conn)
+        now = utcnow()
+        title = body.title or f"{source['title']}（克隆）"
+
+        conn.execute(
+            "INSERT INTO projects (id, title, status, created_at) VALUES (?, ?, 'active', ?)",
+            (pid, title, now),
+        )
+        conn.execute(
+            "INSERT INTO facts (id, project_id, description) VALUES (?, ?, ?)",
+            ("origin", pid, origin),
+        )
+        conn.execute(
+            "INSERT INTO facts (id, project_id, description) VALUES (?, ?, ?)",
+            ("goal", pid, goal),
+        )
+
+        cloned_hints: list[Hint] = []
+        for hint in hints:
+            hid = next_hint_id(conn, pid)
+            conn.execute(
+                "INSERT INTO hints (id, project_id, content, creator, created_at) VALUES (?, ?, ?, ?, ?)",
+                (hid, pid, hint["content"], hint["creator"], now),
+            )
+            cloned_hints.append(
+                Hint(
+                    id=hid,
+                    content=hint["content"],
+                    creator=hint["creator"],
+                    created_at=now,
+                )
+            )
+
+        return ProjectDetail(
+            project=ProjectMeta(id=pid, title=title, status="active", created_at=now, reason=None),
+            facts=[
+                Fact(id="origin", description=origin),
+                Fact(id="goal", description=goal),
+            ],
+            intents=[],
+            hints=cloned_hints,
+        )
+
+
 @router.get("/projects/{project_id}", response_model=ProjectDetail)
 def get_project(project_id: str):
     with get_conn() as conn:
@@ -141,6 +206,7 @@ def delete_project(project_id: str):
     with get_conn() as conn:
         get_project_or_404(conn, project_id)
         conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+    delete_project_artifacts(project_id)
 
 
 @router.put("/projects/{project_id}/title", response_model=ProjectMeta)

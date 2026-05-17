@@ -20,6 +20,7 @@ from cairn.dispatcher.tasks.common import (
     cancel_reason,
     did_timeout,
     finish_worker_run_record,
+    make_run_record_output_callback,
     preview,
     run_healthcheck,
     run_worker_process,
@@ -148,6 +149,11 @@ def run_reason_task(
             timeout_seconds=config.tasks.reason.timeout,
             lease=lease,
             cancellation=cancellation,
+            on_output=make_run_record_output_callback(
+                runtime_manager,
+                run_record,
+                extract_session=driver.extract_session,
+            ),
         )
         execute_ms = int((time.perf_counter() - execute_started) * 1000)
         total_ms = int((time.perf_counter() - task_started) * 1000)

@@ -324,12 +324,19 @@ func (b *codexSessionBuilder) handleFunctionCallOutput(
 		return
 	}
 
-	output, _ := parseCodexFunctionOutput(payload)
-	if !output.Exists() {
+	output, rawOutput := parseCodexFunctionOutput(payload)
+	if !output.Exists() && strings.TrimSpace(rawOutput) == "" {
 		return
 	}
 
-	switch b.callNames[callID] {
+	name := b.callNames[callID]
+	if text := codexFunctionOutputText(output); text != "" {
+		b.setCallResultContent(callID, text)
+	} else if text := extractCodexExecOutput(rawOutput); text != "" {
+		b.setCallResultContent(callID, text)
+	}
+
+	switch name {
 	case "spawn_agent":
 		agentID := strings.TrimSpace(output.Get("agent_id").Str)
 		if agentID == "" {
@@ -360,6 +367,26 @@ func (b *codexSessionBuilder) handleFunctionCallOutput(
 			return true
 		})
 	}
+}
+
+func (b *codexSessionBuilder) setCallResultContent(
+	callID, content string,
+) {
+	if callID == "" {
+		return
+	}
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return
+	}
+	ref, ok := b.callRefs[callID]
+	if !ok || ref.messageIndex < 0 || ref.messageIndex >= len(b.messages) {
+		return
+	}
+	if ref.callIndex < 0 || ref.callIndex >= len(b.messages[ref.messageIndex].ToolCalls) {
+		return
+	}
+	b.messages[ref.messageIndex].ToolCalls[ref.callIndex].ResultContent = content
 }
 
 // setCallSubagentSessionID links a tool call to the session of
@@ -707,8 +734,12 @@ func formatCodexBashCall(
 func formatCodexWriteStdinCall(
 	summary string, args gjson.Result, rawArgs string,
 ) string {
+	sid := codexArgValue(args, "session_id")
+	chars := codexArgString(args, "chars")
 	if summary == "" {
-		if sid := codexArgValue(args, "session_id"); sid != "" {
+		if chars == "" {
+			summary = "读取运行结果"
+		} else if sid != "" {
 			summary = "stdin -> " + sid
 		} else {
 			summary = "stdin"
@@ -716,16 +747,11 @@ func formatCodexWriteStdinCall(
 	}
 
 	header := formatToolHeader("Bash", summary)
-	chars := codexArgString(args, "chars")
 	if chars != "" {
 		quoted := strings.Trim(
 			strconv.QuoteToASCII(chars), "\"",
 		)
 		return header + "\n" + truncate(quoted, 220)
-	}
-
-	if preview := codexArgPreview(args, rawArgs); preview != "" {
-		return header + "\n" + preview
 	}
 	return header
 }
@@ -971,6 +997,46 @@ func parseCodexFunctionOutput(
 		}
 		return gjson.Result{}, raw
 	}
+}
+
+func codexFunctionOutputText(output gjson.Result) string {
+	if !output.Exists() {
+		return ""
+	}
+	if output.Type == gjson.String {
+		return extractCodexExecOutput(strings.TrimSpace(output.Str))
+	}
+	if text := strings.TrimSpace(output.Get("content").Str); text != "" {
+		return text
+	}
+	if text := strings.TrimSpace(output.Get("stdout").Str); text != "" {
+		return text
+	}
+	if text := strings.TrimSpace(output.Get("stderr").Str); text != "" {
+		return text
+	}
+	raw := strings.TrimSpace(output.Raw)
+	if raw == "" || raw == "{}" || raw == "[]" {
+		return ""
+	}
+	return raw
+}
+
+func extractCodexExecOutput(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if _, after, ok := strings.Cut(raw, "\nOutput:\n"); ok {
+		after = strings.TrimSpace(after)
+		if after != "" {
+			return after
+		}
+	}
+	if strings.HasPrefix(raw, "Command: ") && strings.Contains(raw, "\nOutput:\n") {
+		return ""
+	}
+	return raw
 }
 
 func codexWaitAgentIDs(args gjson.Result) []string {

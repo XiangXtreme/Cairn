@@ -4,7 +4,7 @@ from contextlib import suppress
 import logging
 import threading
 import time
-from typing import Any
+from typing import Any, Callable
 
 from docker.errors import APIError, DockerException
 from docker.models.containers import Container
@@ -31,6 +31,7 @@ class DockerManagedProcess:
         self._cancel_reason: str | None = None
         self._read_error: str | None = None
         self._done = threading.Event()
+        self._on_output: Callable[[str, str, str, str], None] | None = None
 
     def start(self) -> None:
         kwargs: dict[str, Any] = {}
@@ -73,6 +74,17 @@ class DockerManagedProcess:
             cancel_reason=self._cancel_reason,
         )
 
+    def communicate_streaming(
+        self,
+        timeout: float | None,
+        on_output: Callable[[str, str, str, str], None] | None = None,
+    ) -> ProcessResult:
+        self._on_output = on_output
+        try:
+            return self.communicate(timeout=timeout)
+        finally:
+            self._on_output = None
+
     def kill(self) -> None:
         if self._exec_id is None:
             return
@@ -109,8 +121,10 @@ class DockerManagedProcess:
                 stdout, stderr = self._split_chunk(chunk)
                 if stdout:
                     self._stdout.append(stdout)
+                    self._notify_output("stdout", stdout)
                 if stderr:
                     self._stderr.append(stderr)
+                    self._notify_output("stderr", stderr)
         except DockerException as exc:
             self._read_error = str(exc)
         finally:
@@ -131,6 +145,11 @@ class DockerManagedProcess:
         if callable(response_close):
             with suppress(Exception):
                 response_close()
+
+    def _notify_output(self, stream_name: str, chunk: str) -> None:
+        if self._on_output is None:
+            return
+        self._on_output(stream_name, chunk, "".join(self._stdout), "".join(self._stderr))
 
     def _resolve_exit_code(self) -> int:
         assert self._exec_id is not None

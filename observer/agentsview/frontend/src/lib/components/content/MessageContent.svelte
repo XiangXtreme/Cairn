@@ -39,6 +39,12 @@
 
   let copied = $state(false);
 
+  type CairnConclusion = {
+    accepted: boolean;
+    fact?: string;
+    complete?: string;
+  };
+
   let segments = $derived(
     enrichSegments(
       parseContent(
@@ -49,6 +55,47 @@
       ),
       message.tool_calls,
     ),
+  );
+
+  function parseCairnConclusion(
+    content: string,
+  ): CairnConclusion | null {
+    const trimmed = content.trim();
+    if (!trimmed.startsWith("{") || !trimmed.includes("\"accepted\"")) {
+      return null;
+    }
+    try {
+      const data = JSON.parse(trimmed) as {
+        accepted?: unknown;
+        data?: {
+          fact?: { description?: unknown };
+          complete?: { description?: unknown };
+        };
+      };
+      if (typeof data.accepted !== "boolean") return null;
+      const fact =
+        typeof data.data?.fact?.description === "string"
+          ? data.data.fact.description
+          : undefined;
+      const complete =
+        typeof data.data?.complete?.description === "string"
+          ? data.data.complete.description
+          : undefined;
+      if (!fact && !complete) return null;
+      return {
+        accepted: data.accepted,
+        fact,
+        complete,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  let cairnConclusion = $derived(
+    !message.has_tool_use && message.role === "assistant"
+      ? parseCairnConclusion(message.content)
+      : null,
   );
 
   let isUser = $derived(message.role === "user");
@@ -381,16 +428,59 @@
         {/if}
       {:else}
         {#if showText}
-          <div
-            class="text-content markdown"
-            use:applyHighlight={{
-              q: highlightQuery,
-              current: isCurrentHighlight,
-              content: segment.content,
-            }}
-          >
-            {@html renderMarkdown(segment.content)}
-          </div>
+          {#if cairnConclusion}
+            <div class="conclusion-card">
+              <div class="conclusion-header">
+                <span
+                  class="conclusion-status"
+                  class:is-complete={cairnConclusion.accepted}
+                >
+                  {cairnConclusion.accepted ? "已完成" : "未完成"}
+                </span>
+              </div>
+              {#if cairnConclusion.fact}
+                <section class="conclusion-section">
+                  <div class="conclusion-label">已确认事实</div>
+                  <div
+                    class="text-content markdown"
+                    use:applyHighlight={{
+                      q: highlightQuery,
+                      current: isCurrentHighlight,
+                      content: cairnConclusion.fact,
+                    }}
+                  >
+                    {@html renderMarkdown(cairnConclusion.fact)}
+                  </div>
+                </section>
+              {/if}
+              {#if cairnConclusion.complete}
+                <section class="conclusion-section">
+                  <div class="conclusion-label">完成原因</div>
+                  <div
+                    class="text-content markdown"
+                    use:applyHighlight={{
+                      q: highlightQuery,
+                      current: isCurrentHighlight,
+                      content: cairnConclusion.complete,
+                    }}
+                  >
+                    {@html renderMarkdown(cairnConclusion.complete)}
+                  </div>
+                </section>
+              {/if}
+            </div>
+          {:else}
+            <div
+              class="text-content markdown"
+              use:applyHighlight={{
+                q: highlightQuery,
+                current: isCurrentHighlight,
+                content: segment.content,
+              }}
+            >
+              {@html renderMarkdown(segment.content)}
+            </div>
+          {/if}
         {/if}
       {/if}
     {/each}
@@ -633,6 +723,50 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+  }
+
+  .conclusion-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-muted);
+  }
+
+  .conclusion-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .conclusion-status {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: rgba(148, 163, 184, 0.18);
+  }
+
+  .conclusion-status.is-complete {
+    color: var(--accent-green);
+    background: rgba(34, 197, 94, 0.14);
+  }
+
+  .conclusion-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .conclusion-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
   }
 
   /* Markdown prose styles */

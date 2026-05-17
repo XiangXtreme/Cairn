@@ -153,6 +153,34 @@ describe("buildGroupSections", () => {
     expect(result[0]!.label).toBe("test-project");
     expect(result[0]!.groups).toHaveLength(2);
   });
+
+  it("sorts Cairn projects by project id descending instead of session count", () => {
+    const olderA = makeGroup("claude", 1, "old-a");
+    olderA.project = "cairn:proj_030";
+    olderA.sessions.forEach((session) => {
+      session.project = "cairn:proj_030";
+    });
+    const olderB = makeGroup("claude", 1, "old-b");
+    olderB.project = "cairn:proj_030";
+    olderB.sessions.forEach((session) => {
+      session.project = "cairn:proj_030";
+    });
+    const newer = makeGroup("gpt", 1, "newer");
+    newer.project = "cairn:proj_033";
+    newer.sessions.forEach((session) => {
+      session.project = "cairn:proj_033";
+    });
+
+    const result = buildGroupSections(
+      [olderA, olderB, newer],
+      "project",
+    );
+
+    expect(result.map((section) => section.label)).toEqual([
+      "cairn:proj_033",
+      "cairn:proj_030",
+    ]);
+  });
 });
 
 // ---------------------------------------------------------------------------

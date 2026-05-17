@@ -1033,7 +1033,9 @@ export function buildSessionGroups(sessions: Session[]): SessionGroup[] {
   const insertionOrder: string[] = [];
 
   for (const s of sessions) {
-    const root = findRoot(s.id, byId, rootCache);
+    const root = s.project.startsWith("cairn:")
+      ? s.id
+      : findRoot(s.id, byId, rootCache);
     // Sessions without a parent_session_id that aren't
     // pointed to by anyone get root == their own id, so
     // they form a single-session group naturally.

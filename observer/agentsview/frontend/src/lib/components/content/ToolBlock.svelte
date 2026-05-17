@@ -318,8 +318,8 @@
   {#if !collapsed}
     {#if metaTags}
       <div class="tool-meta">
-        {#each metaTags as { label: metaLabel, value }}
-          <span class="meta-tag">
+        {#each metaTags as { label: metaLabel, value, fullValue }}
+          <span class="meta-tag" title={fullValue && fullValue !== value ? fullValue : undefined}>
             <span class="meta-label">{metaLabel}:</span>
             {value}
           </span>

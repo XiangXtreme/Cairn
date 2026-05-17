@@ -24,9 +24,33 @@ class DispatchRuntimeSettings(BaseModel):
     prompt_group: str = Field(min_length=1)
 
 
+class DispatchReasonTaskSettings(BaseModel):
+    timeout: int = Field(gt=0)
+    max_intents: int = Field(gt=0)
+    allow_unavailable_dispatch: bool = False
+    unavailable_fact_limit: int = Field(ge=1, default=2)
+
+
+class DispatchBootstrapTaskSettings(BaseModel):
+    timeout: int = Field(gt=0)
+    conclude_timeout: int = Field(gt=0)
+
+
+class DispatchExploreTaskSettings(BaseModel):
+    timeout: int = Field(gt=0)
+    conclude_timeout: int = Field(gt=0)
+
+
+class DispatchTaskSettings(BaseModel):
+    bootstrap: DispatchBootstrapTaskSettings
+    reason: DispatchReasonTaskSettings
+    explore: DispatchExploreTaskSettings
+
+
 class DispatchWorkerSettings(BaseModel):
     source_name: str = ""
     name: str
+    enabled: bool = True
     type: WorkerType
     task_types: list[TaskType]
     max_running: int = Field(gt=0)
@@ -58,6 +82,7 @@ class DispatchSettings(BaseModel):
     path: str
     writable: bool
     runtime: DispatchRuntimeSettings
+    tasks: DispatchTaskSettings
     workers: list[DispatchWorkerSettings]
     restart_required: bool = True
 
@@ -65,6 +90,7 @@ class DispatchSettings(BaseModel):
 class UpdateDispatchSettingsRequest(BaseModel):
     mode: DispatchSettingsMode = "file"
     runtime: DispatchRuntimeSettings
+    tasks: DispatchTaskSettings
     workers: list[DispatchWorkerSettings]
 
 
@@ -298,3 +324,17 @@ class ReopenResponse(BaseModel):
     project: ProjectMeta
     fact: Fact
     intent: Intent
+
+
+class CloneProjectRequest(BaseModel):
+    title: str | None = None
+
+    @field_validator("title")
+    @classmethod
+    def validate_optional_title(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        text = value.strip()
+        if not text:
+            raise ValueError("must not be empty")
+        return text

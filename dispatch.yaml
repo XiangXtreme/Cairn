@@ -6,7 +6,7 @@ runtime:
   interval: 3
   max_workers: 8
   max_running_projects: 3
-  max_project_workers: 4
+  max_project_workers: 2
   healthcheck_timeout: 20
   prompt_group: default
 tasks:
@@ -15,7 +15,9 @@ tasks:
     conclude_timeout: 90
   reason:
     timeout: 300
-    max_intents: 2
+    max_intents: 1
+    allow_unavailable_dispatch: false
+    unavailable_fact_limit: 2
   explore:
     timeout: 300
     conclude_timeout: 90

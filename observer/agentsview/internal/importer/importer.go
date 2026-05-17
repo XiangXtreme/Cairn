@@ -410,12 +410,14 @@ func convertToolCalls(
 	calls := make([]db.ToolCall, len(parsed))
 	for i, tc := range parsed {
 		calls[i] = db.ToolCall{
-			SessionID: sessionID,
-			ToolName:  tc.ToolName,
-			Category:  tc.Category,
-			ToolUseID: tc.ToolUseID,
-			InputJSON: tc.InputJSON,
-			SkillName: tc.SkillName,
+			SessionID:           sessionID,
+			ToolName:            tc.ToolName,
+			Category:            tc.Category,
+			ToolUseID:           tc.ToolUseID,
+			InputJSON:           tc.InputJSON,
+			SkillName:           tc.SkillName,
+			ResultContentLength: len(tc.ResultContent),
+			ResultContent:       tc.ResultContent,
 		}
 		// Map execution output from ResultEvents to
 		// ResultContent for display in the UI.

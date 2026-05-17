@@ -3,6 +3,7 @@
 export interface MetaTag {
   label: string;
   value: string;
+  fullValue?: string;
 }
 
 export function truncate(s: string, max: number): string {
@@ -100,14 +101,19 @@ export function extractToolParamMeta(
       meta.push({
         label: "description",
         value: truncate(String(params.description), 80),
+        fullValue: String(params.description),
       });
-    const cmd = params.command ?? params.cmd;
-    if (cmd) {
-      const [firstLine = ""] = String(cmd).split("\n");
+    if (
+      toolName === "write_stdin" &&
+      params.session_id &&
+      (params.chars == null || String(params.chars) === "")
+    ) {
       meta.push({
-        label: "cmd",
-        value: truncate(firstLine, 80),
+        label: "session",
+        value: truncate(String(params.session_id), 80),
+        fullValue: String(params.session_id),
       });
+      return meta.length ? meta : null;
     }
   } else if (toolName === "Skill" || toolName === "skill") {
     const skill = params.skill ?? params.name;

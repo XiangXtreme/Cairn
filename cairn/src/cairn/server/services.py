@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import shutil
 import sqlite3
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import HTTPException
 
+from cairn.server.dispatch_settings import resolve_dispatch_config_path
 from cairn.server.models import Intent, ProjectMeta, ProjectReason
 
 def utcnow() -> str:
@@ -216,6 +219,51 @@ def clear_project_reason(conn: sqlite3.Connection, project_id: str) -> None:
         """,
         (project_id,),
     )
+
+
+def delete_project_artifacts(project_id: str) -> None:
+    for path in project_artifact_paths(project_id):
+        shutil.rmtree(path, ignore_errors=True)
+
+
+def project_artifact_paths(project_id: str) -> list[Path]:
+    work_dir = _resolve_runtime_work_dir()
+    project_name = _sanitize_workspace_name(project_id)
+    return [
+        work_dir / "observer" / "runs" / project_id,
+        work_dir / "projects" / project_name,
+    ]
+
+
+def _resolve_runtime_work_dir() -> Path:
+    config_path = resolve_dispatch_config_path()
+    if not config_path.exists():
+        return Path(".cairn-runtime").resolve()
+    try:
+        import yaml
+
+        raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return Path(".cairn-runtime").resolve()
+
+    execution = raw.get("execution")
+    if not isinstance(execution, dict):
+        return Path(".cairn-runtime").resolve()
+    work_dir = execution.get("work_dir")
+    if not isinstance(work_dir, str) or not work_dir.strip():
+        return Path(".cairn-runtime").resolve()
+    return (config_path.parent / work_dir).resolve()
+
+
+def _sanitize_workspace_name(value: str) -> str:
+    cleaned = []
+    for ch in value:
+        if ch.isalnum() or ch in "_.-":
+            cleaned.append(ch)
+        else:
+            cleaned.append("-")
+    text = "".join(cleaned).strip(".-")
+    return text or "project"
 
 
 def expire_workers(conn: sqlite3.Connection, project_id: str | None = None) -> None:

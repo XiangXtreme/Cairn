@@ -166,6 +166,24 @@ This starts `cairn-server` on port `8000` and `cairn-dispatcher` after the serve
 
 Use this mode when you want Linux worker isolation. Use the local runtime when you want direct access to host-installed `claude`, `codex`, or `pi` CLIs.
 
+### Unified Rebuild Script
+
+For day-to-day local development, you can use one helper script to rebuild and restart the main pieces of the stack:
+
+```bash
+./scripts/dev-rebuild.sh cairn
+./scripts/dev-rebuild.sh observer
+./scripts/dev-rebuild.sh all
+./scripts/dev-rebuild.sh check
+```
+
+What each command does:
+
+- `cairn`: rebuilds and recreates `cairn-server` and `cairn-dispatcher`
+- `observer`: rebuilds the local `agentsview` binary with `fts5`, then restarts `cairn-observer`
+- `all`: runs both of the above
+- `check`: prints container status and probes `http://127.0.0.1:8000` and `http://127.0.0.1:8081`
+
 ### Cairn Observer UI
 
 Cairn includes a local observer UI under `observer/agentsview`. It is a Cairn-scoped fork of agentsview: it reads only Cairn-generated worker session mappings from `.cairn-runtime/observer/runs`, groups sessions by Cairn project, and renders the original Claude Code / Codex style session view.

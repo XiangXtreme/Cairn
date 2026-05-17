@@ -6,7 +6,9 @@ import time
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from pathlib import PurePath
+from typing import Callable
 
 from cairn.dispatcher.config import WorkerConfig
 from cairn.dispatcher.protocol.client import CairnClient
@@ -122,6 +124,36 @@ def finish_worker_run_record(
     write_worker_run_record(runtime_manager, record)
 
 
+def update_worker_run_record(
+    runtime_manager: RuntimeManager,
+    record: WorkerRunRecord | None,
+    *,
+    session_id: str | None = None,
+    stdout: str | None = None,
+    stderr: str | None = None,
+) -> None:
+    if record is None:
+        return
+    changed = False
+    if session_id and session_id != record.session_id:
+        record.session_id = session_id
+        changed = True
+    if stdout is not None:
+        stdout_preview = preview(stdout)
+        if stdout_preview != record.stdout_preview:
+            record.stdout_preview = stdout_preview
+            changed = True
+    if stderr is not None:
+        stderr_preview = preview(stderr)
+        if stderr_preview != record.stderr_preview:
+            record.stderr_preview = stderr_preview
+            changed = True
+    if not changed:
+        return
+    record.updated_at = now_utc_iso()
+    write_worker_run_record(runtime_manager, record)
+
+
 def write_worker_run_record(runtime_manager: RuntimeManager, record: WorkerRunRecord) -> None:
     payload = {
         "schema_version": 1,
@@ -148,6 +180,32 @@ def write_worker_run_record(runtime_manager: RuntimeManager, record: WorkerRunRe
     }
     path = PurePath(OBSERVER_RUN_ROOT) / record.project_id / f"{record.run_id}.json"
     runtime_manager.write_observer_text_file(str(path), json.dumps(payload, ensure_ascii=False, indent=2))
+
+
+def mark_stale_worker_run_records(work_dir: Path) -> int:
+    runs_root = work_dir.resolve() / "observer" / OBSERVER_RUN_ROOT
+    if not runs_root.exists():
+        return 0
+    marked = 0
+    stale_at = now_utc_iso()
+    for path in runs_root.glob("*/*.json"):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            LOG.warning("skipping unreadable observer run record path=%s", path)
+            continue
+        if payload.get("status") != "running":
+            continue
+        payload["status"] = "stale"
+        payload["updated_at"] = stale_at
+        payload["ended_at"] = payload.get("ended_at") or stale_at
+        payload["cancelled"] = True
+        payload["cancel_reason"] = "dispatcher_restarted"
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        marked += 1
+    if marked:
+        LOG.info("marked stale observer run records count=%s root=%s", marked, runs_root)
+    return marked
 
 
 def did_timeout(result: ProcessResult) -> bool:
@@ -222,6 +280,7 @@ def run_worker_process(
     timeout_seconds: int,
     lease: HeartbeatLease | None = None,
     cancellation: TaskCancellation | None = None,
+    on_output: Callable[[str, str, str, str], None] | None = None,
 ) -> ProcessResult:
     LOG.info(
         "starting worker process workspace=%s worker=%s phase=%s timeout=%ss",
@@ -242,12 +301,33 @@ def run_worker_process(
     if cancellation is not None:
         cancellation.attach_process(process)
     try:
-        return process.communicate(timeout=timeout_seconds)
+        if on_output is None or not hasattr(process, "communicate_streaming"):
+            return process.communicate(timeout=timeout_seconds)
+        return process.communicate_streaming(timeout=timeout_seconds, on_output=on_output)
     finally:
         if lease is not None:
             lease.attach_process(None)
         if cancellation is not None:
             cancellation.attach_process(None)
+
+
+def make_run_record_output_callback(
+    runtime_manager: RuntimeManager,
+    record: WorkerRunRecord | None,
+    *,
+    extract_session: Callable[[str | None, str, str], str | None],
+) -> Callable[[str, str, str, str], None]:
+    def on_output(stream_name: str, chunk: str, stdout: str, stderr: str) -> None:
+        session_id = extract_session(record.session_id if record is not None else None, stdout, stderr)
+        update_worker_run_record(
+            runtime_manager,
+            record,
+            session_id=session_id,
+            stdout=stdout if stream_name == "stdout" else None,
+            stderr=stderr if stream_name == "stderr" else None,
+        )
+
+    return on_output
 
 
 def project_allows_conclude_fallback(client: CairnClient, project_id: str, *, worker_name: str, intent_id: str) -> bool:

@@ -40,6 +40,12 @@ export interface DisplayItem {
   top: number;
 }
 
+function parseCairnProjectOrdinal(label: string): number | null {
+  const match = /^cairn:\s*proj_(\d+)$/i.exec(label.trim());
+  if (!match) return null;
+  return Number.parseInt(match[1]!, 10);
+}
+
 /**
  * Read persisted group mode from localStorage, migrating the
  * legacy boolean key if needed.
@@ -108,9 +114,25 @@ export function buildGroupSections(
     }
     list.push(g);
   }
-  // Sort by count descending (most sessions first).
+  // For Cairn project folders, show newer project ids first so
+  // `proj_033` stays above `proj_032` regardless of session count.
+  // Otherwise keep the historical count-descending behavior.
   return Array.from(map.entries())
-    .sort((a, b) => b[1].length - a[1].length)
+    .sort((a, b) => {
+      if (mode === "project") {
+        const cairnA = parseCairnProjectOrdinal(a[0]);
+        const cairnB = parseCairnProjectOrdinal(b[0]);
+        if (cairnA !== null && cairnB !== null && cairnA !== cairnB) {
+          return cairnB - cairnA;
+        }
+      }
+      const countDelta = b[1].length - a[1].length;
+      if (countDelta !== 0) return countDelta;
+      return a[0].localeCompare(b[0], undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
+    })
     .map(([label, groups]) => ({ label, groups }));
 }
 

@@ -173,6 +173,62 @@ func TestParseCodexSession_FunctionCalls(t *testing.T) {
 		assertToolCalls(t, msgs[1].ToolCalls, []ParsedToolCall{{ToolName: "write_stdin", Category: "Bash"}})
 	})
 
+	t.Run("write_stdin without chars formats as reading running output", func(t *testing.T) {
+		content := testjsonl.JoinJSONL(
+			testjsonl.CodexSessionMetaJSON("fc-stdin-poll", "/tmp", "user", tsEarly),
+			testjsonl.CodexMsgJSON("user", "poll running command", tsEarlyS1),
+			testjsonl.CodexFunctionCallWithCallIDJSON("write_stdin", "call_poll", map[string]any{
+				"session_id":         "sess-42",
+				"chars":              "",
+				"yield_time_ms":      1000,
+				"max_output_tokens":  4000,
+			}, tsEarlyS5),
+		)
+		_, msgs := runCodexParserTest(t, "test.jsonl", content, false)
+		require.Len(t, msgs, 2)
+		assert.Equal(t, "[Bash: 读取运行结果]", msgs[1].Content)
+		assertToolCalls(t, msgs[1].ToolCalls, []ParsedToolCall{{ToolName: "write_stdin", Category: "Bash"}})
+	})
+
+	t.Run("exec_command output populates result content", func(t *testing.T) {
+		content := testjsonl.JoinJSONL(
+			testjsonl.CodexSessionMetaJSON("fc-out", "/tmp", "user", tsEarly),
+			testjsonl.CodexMsgJSON("user", "probe target", tsEarlyS1),
+			testjsonl.CodexFunctionCallWithCallIDJSON("exec_command", "call_exec", map[string]any{
+				"cmd": "curl -i -s http://example.test",
+			}, tsEarlyS5),
+			testjsonl.CodexFunctionCallOutputJSON("call_exec", "Command: /bin/bash -lc \"curl -i -s http://example.test\"\nChunk ID: deadbeef\nWall time: 0.1234 seconds\nProcess exited with code 0\nOriginal token count: 42\nOutput:\nHTTP/1.1 302 Found\nLocation: http://127.0.0.1/flag.php", tsLate),
+		)
+		_, msgs := runCodexParserTest(t, "test.jsonl", content, false)
+		require.Len(t, msgs, 2)
+		require.Len(t, msgs[1].ToolCalls, 1)
+		assert.Equal(t, "exec_command", msgs[1].ToolCalls[0].ToolName)
+		assert.Equal(
+			t,
+			"HTTP/1.1 302 Found\nLocation: http://127.0.0.1/flag.php",
+			msgs[1].ToolCalls[0].ResultContent,
+		)
+	})
+
+	t.Run("exec_command plain string output populates result content", func(t *testing.T) {
+		content := testjsonl.JoinJSONL(
+			testjsonl.CodexSessionMetaJSON("fc-out-plain", "/tmp", "user", tsEarly),
+			testjsonl.CodexMsgJSON("user", "probe target", tsEarlyS1),
+			testjsonl.CodexFunctionCallWithCallIDJSON("exec_command", "call_exec_plain", map[string]any{
+				"cmd": "curl -i -s http://example.test",
+			}, tsEarlyS5),
+			testjsonl.CodexFunctionCallOutputJSON("call_exec_plain", "Command: /bin/bash -lc \"curl -i -s http://example.test\"\nChunk ID: 123456\nWall time: 0.1564 seconds\nProcess exited with code 0\nOriginal token count: 88\nOutput:\nHTTP/1.1 200 OK\r\nServer: example\r\n\r\nctfhub{demo-flag}", tsLate),
+		)
+		_, msgs := runCodexParserTest(t, "test.jsonl", content, false)
+		require.Len(t, msgs, 2)
+		require.Len(t, msgs[1].ToolCalls, 1)
+		assert.Equal(
+			t,
+			"HTTP/1.1 200 OK\r\nServer: example\r\n\r\nctfhub{demo-flag}",
+			msgs[1].ToolCalls[0].ResultContent,
+		)
+	})
+
 	t.Run("Agent function call normalizes to Task category", func(t *testing.T) {
 		content := testjsonl.JoinJSONL(
 			testjsonl.CodexSessionMetaJSON("fc-agent", "/tmp", "user", tsEarly),

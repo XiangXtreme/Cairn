@@ -466,6 +466,30 @@ func TestPairToolResultsContent(t *testing.T) {
 	}
 }
 
+func TestConvertToolCallsPreservesParsedResultContent(t *testing.T) {
+	got := convertToolCalls("codex:test", []parser.ParsedToolCall{{
+		ToolUseID:     "call_1",
+		ToolName:      "exec_command",
+		Category:      "Bash",
+		InputJSON:     `{"cmd":"echo hi"}`,
+		ResultContent: "hi\n",
+	}})
+
+	want := []db.ToolCall{{
+		SessionID:           "codex:test",
+		ToolUseID:           "call_1",
+		ToolName:            "exec_command",
+		Category:            "Bash",
+		InputJSON:           `{"cmd":"echo hi"}`,
+		ResultContentLength: len("hi\n"),
+		ResultContent:       "hi\n",
+	}}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("convertToolCalls() mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestPairToolResultEventSummaries(t *testing.T) {
 	tests := []struct {
 		name    string

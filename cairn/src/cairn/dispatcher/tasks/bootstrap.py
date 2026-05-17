@@ -19,6 +19,7 @@ from cairn.dispatcher.tasks.common import (
     cancel_reason,
     did_timeout,
     finish_worker_run_record,
+    make_run_record_output_callback,
     project_allows_conclude_fallback,
     preview,
     run_healthcheck,
@@ -127,6 +128,11 @@ def run_bootstrap_task(
             timeout_seconds=config.tasks.bootstrap.timeout,
             lease=lease,
             cancellation=cancellation,
+            on_output=make_run_record_output_callback(
+                runtime_manager,
+                run_record,
+                extract_session=driver.extract_session,
+            ),
         )
         execute_ms = int((time.perf_counter() - execute_started) * 1000)
         session = driver.extract_session(session, first.stdout, first.stderr)
@@ -333,6 +339,11 @@ def _try_conclude_fallback(
         timeout_seconds=config.tasks.bootstrap.conclude_timeout,
         lease=lease,
         cancellation=cancellation,
+        on_output=make_run_record_output_callback(
+            runtime_manager,
+            run_record,
+            extract_session=driver.extract_session,
+        ),
     )
     conclude_ms = int((time.perf_counter() - conclude_started) * 1000)
     finish_worker_run_record(runtime_manager, run_record, result, started=conclude_started, session_id=session)

@@ -115,26 +115,37 @@ describe("extractToolParamMeta", () => {
       description: "Run test suite",
     });
     expect(meta).toEqual([
-      { label: "description", value: "Run test suite" },
-      { label: "cmd", value: "npm test" },
+      { label: "description", value: "Run test suite", fullValue: "Run test suite" },
     ]);
   });
 
-  it("extracts Bash cmd without description", () => {
+  it("does not add a redundant Bash cmd meta tag", () => {
     const meta = extractToolParamMeta("Bash", {
       command: "ls -la",
     });
-    expect(meta).toEqual([
-      { label: "cmd", value: "ls -la" },
-    ]);
+    expect(meta).toBeNull();
   });
 
-  it("shows only first line of multiline Bash command", () => {
+  it("does not add a Bash cmd meta tag for multiline commands either", () => {
     const meta = extractToolParamMeta("Bash", {
       command: "echo hello\necho world",
     });
+    expect(meta).toBeNull();
+  });
+
+  it("shows write_stdin empty-chars calls as session poll metadata", () => {
+    const meta = extractToolParamMeta(
+      "write_stdin",
+      {
+        session_id: "17889",
+        chars: "",
+        yield_time_ms: 1000,
+        max_output_tokens: 4000,
+      },
+      "Bash",
+    );
     expect(meta).toEqual([
-      { label: "cmd", value: "echo hello" },
+      { label: "session", value: "17889", fullValue: "17889" },
     ]);
   });
 
@@ -164,9 +175,7 @@ describe("extractToolParamMeta", () => {
       { command: "go test ./..." },
       "Bash",
     );
-    expect(meta).toEqual([
-      { label: "cmd", value: "go test ./..." },
-    ]);
+    expect(meta).toBeNull();
   });
 
   it("dispatches on category for Gemini grep_search", () => {

@@ -19,7 +19,13 @@ type ProjectSummary struct {
 	Title   string
 	Origin  string
 	Goal    string
-	Intents map[string]string
+	Facts   map[string]string
+	Intents map[string]IntentSummary
+}
+
+type IntentSummary struct {
+	Description string
+	ToFactID    string
 }
 
 func ProjectSummaries(ctx context.Context, dbPath string) (map[string]ProjectSummary, error) {
@@ -55,10 +61,11 @@ func ProjectSummaries(ctx context.Context, dbPath string) (map[string]ProjectSum
 		if err := rows.Scan(&id, &title); err != nil {
 			return nil, fmt.Errorf("scan Cairn project title: %w", err)
 		}
-		if id != "" && title != "" {
+		if id != "" {
 			summaries[id] = ProjectSummary{
 				Title:   title,
-				Intents: make(map[string]string),
+				Facts:   make(map[string]string),
+				Intents: make(map[string]IntentSummary),
 			}
 		}
 	}
@@ -87,8 +94,15 @@ func loadFacts(ctx context.Context, db *sql.DB, summaries map[string]ProjectSumm
 		}
 		summary, ok := summaries[projectID]
 		if !ok {
-			summary = ProjectSummary{Intents: make(map[string]string)}
+			summary = ProjectSummary{
+				Facts:   make(map[string]string),
+				Intents: make(map[string]IntentSummary),
+			}
 		}
+		if summary.Facts == nil {
+			summary.Facts = make(map[string]string)
+		}
+		summary.Facts[id] = description
 		switch id {
 		case "origin":
 			summary.Origin = description
@@ -104,24 +118,30 @@ func loadFacts(ctx context.Context, db *sql.DB, summaries map[string]ProjectSumm
 }
 
 func loadIntents(ctx context.Context, db *sql.DB, summaries map[string]ProjectSummary) error {
-	rows, err := db.QueryContext(ctx, "SELECT project_id, id, description FROM intents")
+	rows, err := db.QueryContext(ctx, "SELECT project_id, id, description, COALESCE(to_fact_id, '') FROM intents")
 	if err != nil {
 		return fmt.Errorf("query Cairn intents: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var projectID, id, description string
-		if err := rows.Scan(&projectID, &id, &description); err != nil {
+		var projectID, id, description, toFactID string
+		if err := rows.Scan(&projectID, &id, &description, &toFactID); err != nil {
 			return fmt.Errorf("scan Cairn intent: %w", err)
 		}
 		summary, ok := summaries[projectID]
 		if !ok {
-			summary = ProjectSummary{Intents: make(map[string]string)}
+			summary = ProjectSummary{
+				Facts:   make(map[string]string),
+				Intents: make(map[string]IntentSummary),
+			}
 		}
 		if summary.Intents == nil {
-			summary.Intents = make(map[string]string)
+			summary.Intents = make(map[string]IntentSummary)
 		}
-		summary.Intents[id] = description
+		summary.Intents[id] = IntentSummary{
+			Description: description,
+			ToFactID:    toFactID,
+		}
 		summaries[projectID] = summary
 	}
 	if err := rows.Err(); err != nil {

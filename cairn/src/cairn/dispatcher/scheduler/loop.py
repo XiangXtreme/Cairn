@@ -16,6 +16,7 @@ from cairn.dispatcher.runtime.manager import create_runtime_manager
 from cairn.dispatcher.runtime.startup_healthcheck import format_failure_summary, run_startup_healthchecks
 from cairn.dispatcher.scheduler.worker_select import choose_worker
 from cairn.dispatcher.tasks.bootstrap import run_bootstrap_task
+from cairn.dispatcher.tasks.common import mark_stale_worker_run_records
 from cairn.dispatcher.tasks.explore import run_explore_task
 from cairn.dispatcher.tasks.reason import run_reason_task
 from cairn.server.models import Intent, ProjectDetail, ProjectSummary
@@ -25,6 +26,24 @@ UNHEALTHY_RETRY_AFTER_SECONDS = 5
 REJECTED_RETRY_AFTER_SECONDS = 5
 BOOTSTRAP_INTENT_DESCRIPTION = "bootstrap"
 BOOTSTRAP_INTENT_CREATOR = "dispatcher.bootstrap"
+UNAVAILABLE_FACT_MARKERS = (
+    "timeout",
+    "timed out",
+    "unavailable",
+    "not responsive",
+    "unresponsive",
+    "application-layer unavailable",
+    "application layer is currently hung",
+    "fully hung",
+    "target-wide timeout",
+    "endpoint becomes responsive again",
+    "endpoint is still",
+    "zero bytes",
+    "0 bytes",
+    "code=000",
+    "curl_code=000",
+    "blocked by target",
+)
 
 
 @dataclass(slots=True)
@@ -54,6 +73,7 @@ class DispatcherLoop:
         self._settings_checked = False
         self._startup_healthchecks_checked = False
         self._config_mtime_ns = self._read_config_mtime_ns()
+        mark_stale_worker_run_records(self.config.execution.work_dir)
 
     def close(self) -> None:
         if self.futures:
@@ -263,6 +283,14 @@ class DispatcherLoop:
             if project.project.reason is not None:
                 return False
             return self._dispatch_initial_project(project)
+        if self._project_waiting_on_unavailable_target(project):
+            self._log_changed(
+                f"{skip_scope}:waiting_unavailable",
+                logging.INFO,
+                "skip project=%s because recent facts indicate the target is unavailable",
+                summary.id,
+            )
+            return False
         running_intent_ids = self._project_running_explore_intents(summary.id)
         unclaimed_intents = [
             intent
@@ -275,11 +303,12 @@ class DispatcherLoop:
         if running_intent_ids and not unclaimed_intents:
             self._log_changed(
                 f"{skip_scope}:explore_running",
-                logging.DEBUG,
-                "skip explore project=%s because all unclaimed intents are already running locally intents=%s",
+                logging.INFO,
+                "skip reason project=%s because explore tasks are still running intents=%s",
                 summary.id,
                 sorted(running_intent_ids),
             )
+            return False
         if unclaimed_intents:
             newest = max(unclaimed_intents, key=lambda i: i.created_at)
             export_yaml = self.client.export_project(summary.id)
@@ -525,6 +554,9 @@ class DispatcherLoop:
         blocked_task_type: list[str] = []
         running_counts = self._worker_counts()
         for worker in self.config.workers:
+            if not worker.enabled:
+                blocked_task_type.append(f"{worker.name}(disabled)")
+                continue
             if task_type not in worker.task_types:
                 blocked_task_type.append(worker.name)
                 continue
@@ -640,6 +672,20 @@ class DispatcherLoop:
         if not project.intents:
             return True
         return all(self._is_bootstrap_intent(intent) for intent in project.intents)
+
+    def _project_waiting_on_unavailable_target(self, project: ProjectDetail) -> bool:
+        if self.config.tasks.reason.allow_unavailable_dispatch:
+            return False
+        facts = [fact for fact in project.facts if fact.id not in {"origin", "goal"}]
+        limit = self.config.tasks.reason.unavailable_fact_limit
+        if len(facts) < limit:
+            return False
+        recent = facts[-limit:]
+        return all(self._is_unavailable_fact(fact.description) for fact in recent)
+
+    def _is_unavailable_fact(self, description: str) -> bool:
+        text = description.casefold()
+        return any(marker in text for marker in UNAVAILABLE_FACT_MARKERS)
 
     def _create_bootstrap_intent(self, project_id: str) -> Intent | None:
         response = self.client.create_intent(

@@ -483,6 +483,7 @@ type ParsedToolCall struct {
 	InputJSON         string // raw JSON of the input object
 	SkillName         string // skill name when ToolName is "Skill"
 	SubagentSessionID string // linked subagent session file (e.g. "agent-{task_id}")
+	ResultContent     string
 	ResultEvents      []ParsedToolResultEvent
 }
 

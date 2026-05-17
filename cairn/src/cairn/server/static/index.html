@@ -413,6 +413,11 @@
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path d="M14.25 3H7.5A2.25 2.25 0 0 0 5.25 5.25v13.5A2.25 2.25 0 0 0 7.5 21h9a2.25 2.25 0 0 0 2.25-2.25V8.25L14.25 3Z"/><path d="M14.25 3v5.25h4.5"/><path d="M8.25 12h7.5M8.25 15h5.25"/></svg>
                 快照
               </button>
+              <button type="button" @click.stop="cloneProjectById(p.id, p.title)"
+                class="px-2 py-1 rounded-lg border border-violet-200 text-[11px] text-violet-600 hover:bg-violet-50 transition flex items-center gap-1">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><rect x="9" y="9" width="10" height="10" rx="2"/><rect x="5" y="5" width="10" height="10" rx="2"/></svg>
+                克隆
+              </button>
               <template x-if="p.status !== 'completed'">
                 <button type="button" @click.stop="toggleProjectStopById(p.id, p.status)"
                   class="px-2 py-1 rounded-lg border text-[11px] transition flex items-center gap-1"
@@ -516,7 +521,7 @@
             <div class="text-sm font-medium text-slate-700" x-text="dispatchSettingsMode === 'ui' ? '当前使用 UI 配置模式' : '当前使用配置文件模式'"></div>
             <p class="mt-1 text-xs leading-5 text-slate-500" x-text="dispatchSettingsMode === 'ui' ? 'Agent 配置保存到 datas/cairn/dispatch_ui.yaml，不会进入 Git；第一次打开会从当前 YAML 克隆一份。' : '读取并保存 CAIRN_DISPATCH_CONFIG 指向的 YAML，适合把配置作为项目文件维护。'"></p>
           </div>
-          <div class="mt-5 grid grid-cols-2 lg:grid-cols-3 gap-3">
+          <div class="mt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
             <label class="block">
               <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">最大 Worker</span>
               <input type="number" x-model.number="dispatchForm.runtime.max_workers" class="mt-2 w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
@@ -530,6 +535,10 @@
               <input type="number" x-model.number="dispatchForm.runtime.max_project_workers" class="mt-2 w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
             </label>
             <label class="block">
+              <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">每轮意图数</span>
+              <input type="number" x-model.number="dispatchForm.tasks.reason.max_intents" class="mt-2 w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+            </label>
+            <label class="block">
               <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">调度间隔</span>
               <input type="number" x-model.number="dispatchForm.runtime.interval" class="mt-2 w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
             </label>
@@ -541,7 +550,18 @@
               <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">提示词组</span>
               <input x-model="dispatchForm.runtime.prompt_group" class="mt-2 w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
             </label>
+            <label class="block">
+              <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">不可用阈值</span>
+              <input type="number" x-model.number="dispatchForm.tasks.reason.unavailable_fact_limit" class="mt-2 w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+            </label>
           </div>
+          <label class="mt-4 flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <span>
+              <span class="block text-sm font-medium text-slate-700">目标不可用时继续派发</span>
+              <span class="mt-0.5 block text-xs leading-5 text-slate-500">关闭后，连续不可用事实会让项目等待人工恢复，不再自动开新 Agent。</span>
+            </span>
+            <input type="checkbox" x-model="dispatchForm.tasks.reason.allow_unavailable_dispatch" class="h-5 w-5 rounded border-slate-300 text-brand-500 focus:ring-brand-200">
+          </label>
         </article>
       </section>
 
@@ -564,13 +584,17 @@
 
         <div class="mt-5 grid grid-cols-1 2xl:grid-cols-2 gap-4">
           <template x-for="(worker, idx) in dispatchForm.workers" :key="worker.source_name || `${worker.type}-${idx}`">
-            <article class="rounded-3xl border border-slate-200 bg-slate-50/70 p-4 shadow-sm">
+            <article class="rounded-3xl border border-slate-200 bg-slate-50/70 p-4 shadow-sm transition"
+              :class="worker.enabled === false ? 'opacity-60' : ''">
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
                   <div class="flex flex-wrap items-center gap-2">
                     <span class="rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]"
                       :class="dispatchWorkerTypeClass(worker.type)"
                       x-text="worker.type"></span>
+                    <span class="rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]"
+                      :class="worker.enabled === false ? 'bg-slate-200 text-slate-500' : 'bg-teal-50 text-teal-700 border border-teal-200'"
+                      x-text="worker.enabled === false ? '已禁用' : '启用中'"></span>
                     <span class="text-xs text-slate-400" x-text="worker.source_name && worker.source_name !== worker.name ? `来自 ${worker.source_name}` : '新 Worker'"></span>
                   </div>
                   <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -589,7 +613,14 @@
                     </label>
                   </div>
                 </div>
-                <button @click="removeDispatchWorker(idx)" class="shrink-0 rounded-xl border border-rose-200 px-3 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 transition">移除</button>
+                <div class="flex shrink-0 items-center gap-2">
+                  <button @click="toggleDispatchWorkerEnabled(worker)"
+                    class="rounded-xl border px-3 py-2 text-sm font-medium transition"
+                    :class="worker.enabled === false ? 'border-teal-200 text-teal-700 hover:bg-teal-50' : 'border-slate-200 text-slate-600 hover:bg-slate-50'">
+                    <span x-text="worker.enabled === false ? '启用' : '禁用'"></span>
+                  </button>
+                  <button @click="removeDispatchWorker(idx)" class="rounded-xl border border-rose-200 px-3 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 transition">移除</button>
+                </div>
               </div>
 
               <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -726,6 +757,11 @@
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path d="M14.25 3H7.5A2.25 2.25 0 0 0 5.25 5.25v13.5A2.25 2.25 0 0 0 7.5 21h9a2.25 2.25 0 0 0 2.25-2.25V8.25L14.25 3Z"/><path d="M14.25 3v5.25h4.5"/><path d="M8.25 12h7.5M8.25 15h5.25"/></svg>
         快照
       </button>
+      <button @click="cloneProject()"
+        class="px-2.5 py-1 rounded-lg border border-violet-200 text-xs text-violet-600 hover:bg-violet-50 transition flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><rect x="9" y="9" width="10" height="10" rx="2"/><rect x="5" y="5" width="10" height="10" rx="2"/></svg>
+        克隆
+      </button>
       <template x-if="!replay.active && project.project.status !== 'completed'">
         <button @click="toggleProjectStop()"
           class="px-2.5 py-1 rounded-lg border text-xs transition flex items-center gap-1.5"
@@ -801,6 +837,15 @@
           <span class="reason-graph-ambient"></span>
           <span class="reason-graph-scanline"></span>
           <span class="reason-graph-sweep"></span>
+        </div>
+      </template>
+
+      <template x-if="projectWaitingOnUnavailableTarget()">
+        <div class="absolute top-14 right-3 z-10 max-w-80">
+          <div class="rounded-2xl border border-amber-200 bg-amber-50/95 px-3.5 py-3 text-amber-900 shadow-lg shadow-amber-100/60 backdrop-blur">
+            <div class="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-600">等待目标恢复</div>
+            <div class="mt-1 text-sm leading-5 text-amber-800">最近结论显示目标不可用，调度器会暂停自动派发。恢复项目或打开不可用继续派发后可继续。</div>
+          </div>
         </div>
       </template>
 
@@ -1229,6 +1274,23 @@
   </div>
 </div>
 
+<!-- Clone Project -->
+<div x-show="showCloneModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center overlay" @click.self="showCloneModal = false">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 border border-slate-200/60" @click.stop>
+    <h3 class="text-base font-semibold text-slate-700 mb-1">克隆项目</h3>
+    <p class="text-xs text-slate-400 mb-4" x-text="projectLabel(cloneForm.projectId, cloneForm.originalTitle)"></p>
+    <div class="space-y-3">
+      <input x-ref="cloneTitleInput" x-model="cloneForm.title" @keydown.enter.prevent="confirmCloneProject()" placeholder="新项目标题" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-100 focus:border-violet-400 transition placeholder:text-slate-300">
+      <p class="text-[11px] text-slate-400">将复制原项目的标题、起点、目标和提示，并创建一个全新的可运行项目。</p>
+    </div>
+    <div class="flex justify-end gap-2 mt-5">
+      <button @click="showCloneModal = false" class="px-4 py-2 text-sm text-slate-500 hover:bg-slate-50 rounded-xl transition">取消</button>
+      <button @click="confirmCloneProject()" :disabled="!cloneForm.projectId || !cloneForm.title"
+        class="px-5 py-2 text-sm bg-violet-500 text-white rounded-xl font-medium hover:bg-violet-600 transition disabled:opacity-30 shadow-sm shadow-violet-200">创建克隆</button>
+    </div>
+  </div>
+</div>
+
 <!-- Local Preferences -->
 <div x-show="showLocalPrefs" x-cloak class="fixed inset-0 z-50 flex items-center justify-center overlay" @click.self="showLocalPrefs = false">
   <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-slate-200/60" @click.stop>
@@ -1367,6 +1429,7 @@ function cairnApp() {
     showHintModal: false,
     showReopenModal: false,
     showRenameModal: false,
+    showCloneModal: false,
     showLocalPrefs: false,
     showSettings: false,
     showYamlModal: false,
@@ -1381,10 +1444,16 @@ function cairnApp() {
     hintForm: { content: '' },
     reopenForm: { projectId: '', projectTitle: '', description: '' },
     renameForm: { projectId: '', originalTitle: '', title: '' },
+    cloneForm: { projectId: '', originalTitle: '', title: '' },
     localPrefs: { actor_name: 'Human', layout_mode: 'dagre_tb' },
     settingsForm: { intent_timeout: 5, reason_timeout: 5 },
     dispatchForm: {
       runtime: { interval: 3, max_workers: 1, max_running_projects: 1, max_project_workers: 1, healthcheck_timeout: 20, prompt_group: 'default' },
+      tasks: {
+        bootstrap: { timeout: 300, conclude_timeout: 90 },
+        reason: { timeout: 300, max_intents: 1, allow_unavailable_dispatch: false, unavailable_fact_limit: 2 },
+        explore: { timeout: 300, conclude_timeout: 90 },
+      },
       workers: [],
     },
     dispatchSettingsMode: '',
@@ -1607,6 +1676,37 @@ function cairnApp() {
 
     workingIntentBadgeText(count) {
       return `探索中 · ${count}`;
+    },
+
+    factLooksUnavailable(description) {
+      const text = String(description || '').toLowerCase();
+      return [
+        'timeout',
+        'timed out',
+        'unavailable',
+        'not responsive',
+        'unresponsive',
+        'application-layer unavailable',
+        'application layer is currently hung',
+        'fully hung',
+        'target-wide timeout',
+        'endpoint becomes responsive again',
+        'endpoint is still',
+        'zero bytes',
+        '0 bytes',
+        'code=000',
+        'curl_code=000',
+        'blocked by target',
+      ].some((marker) => text.includes(marker));
+    },
+
+    projectWaitingOnUnavailableTarget() {
+      if (!this.project?.project || this.project.project.status !== 'active' || this.project.project.reason) return false;
+      if (this.dispatchForm?.tasks?.reason?.allow_unavailable_dispatch === true) return false;
+      const facts = (this.project.facts || []).filter((fact) => !['origin', 'goal'].includes(fact.id));
+      const limit = Number(this.dispatchForm?.tasks?.reason?.unavailable_fact_limit || 2);
+      if (facts.length < limit) return false;
+      return facts.slice(-limit).every((fact) => this.factLooksUnavailable(fact.description));
     },
 
     isBootstrapIntent(intent) {
@@ -1920,9 +2020,11 @@ function cairnApp() {
         this.dispatchSettingsMode = payload.mode || this.dispatchSettingsMode;
         this.dispatchForm = {
           runtime: { ...payload.runtime },
+          tasks: this.normalizeDispatchTasks(payload.tasks),
           workers: (payload.workers || []).map((worker) => ({
             source_name: worker.source_name || worker.name || '',
             name: worker.name || '',
+            enabled: worker.enabled !== false,
             type: worker.type || 'codex',
             task_types: Array.isArray(worker.task_types) ? [...worker.task_types] : ['bootstrap', 'reason', 'explore'],
             max_running: worker.max_running || 1,
@@ -1953,10 +2055,51 @@ function cairnApp() {
       await this.loadDispatchSettings();
     },
 
+    normalizeDispatchTasks(tasks) {
+      const source = tasks || {};
+      return {
+        bootstrap: {
+          timeout: Number(source.bootstrap?.timeout || 300),
+          conclude_timeout: Number(source.bootstrap?.conclude_timeout || 90),
+        },
+        reason: {
+          timeout: Number(source.reason?.timeout || 300),
+          max_intents: Number(source.reason?.max_intents || 1),
+          allow_unavailable_dispatch: source.reason?.allow_unavailable_dispatch === true,
+          unavailable_fact_limit: Number(source.reason?.unavailable_fact_limit || 2),
+        },
+        explore: {
+          timeout: Number(source.explore?.timeout || 300),
+          conclude_timeout: Number(source.explore?.conclude_timeout || 90),
+        },
+      };
+    },
+
+    serializeDispatchTasks(tasks) {
+      const normalized = this.normalizeDispatchTasks(tasks);
+      return {
+        bootstrap: {
+          timeout: normalized.bootstrap.timeout,
+          conclude_timeout: normalized.bootstrap.conclude_timeout,
+        },
+        reason: {
+          timeout: normalized.reason.timeout,
+          max_intents: normalized.reason.max_intents,
+          allow_unavailable_dispatch: normalized.reason.allow_unavailable_dispatch,
+          unavailable_fact_limit: normalized.reason.unavailable_fact_limit,
+        },
+        explore: {
+          timeout: normalized.explore.timeout,
+          conclude_timeout: normalized.explore.conclude_timeout,
+        },
+      };
+    },
+
     blankDispatchWorker() {
       return {
         source_name: '',
         name: `worker_${this.dispatchForm.workers.length + 1}`,
+        enabled: true,
         type: 'codex',
         task_types: ['bootstrap', 'reason', 'explore'],
         max_running: 1,
@@ -1976,6 +2119,10 @@ function cairnApp() {
 
     removeDispatchWorker(index) {
       this.dispatchForm.workers.splice(index, 1);
+    },
+
+    toggleDispatchWorkerEnabled(worker) {
+      worker.enabled = worker.enabled === false;
     },
 
     onDispatchWorkerTypeChange(worker) {
@@ -2037,9 +2184,11 @@ function cairnApp() {
         const payload = {
           mode: this.dispatchSettingsMode,
           runtime: { ...this.dispatchForm.runtime },
+          tasks: this.serializeDispatchTasks(this.dispatchForm.tasks),
           workers: this.dispatchForm.workers.map((worker) => ({
             source_name: worker.source_name || '',
             name: worker.name || '',
+            enabled: worker.enabled !== false,
             type: worker.type,
             task_types: worker.task_types || [],
             max_running: Number(worker.max_running),
@@ -2056,9 +2205,11 @@ function cairnApp() {
         this.dispatchSettingsMode = saved.mode || this.dispatchSettingsMode;
         this.dispatchForm = {
           runtime: { ...saved.runtime },
+          tasks: this.normalizeDispatchTasks(saved.tasks),
           workers: (saved.workers || []).map((worker) => ({
             source_name: worker.source_name || worker.name || '',
             name: worker.name || '',
+            enabled: worker.enabled !== false,
             type: worker.type || 'codex',
             task_types: Array.isArray(worker.task_types) ? [...worker.task_types] : ['bootstrap', 'reason', 'explore'],
             max_running: worker.max_running || 1,
@@ -3774,6 +3925,42 @@ function cairnApp() {
         await this.openProject(data.project.id);
         this.showToast('项目已创建');
       } catch(e) { this.showToast(e.message, 'error'); }
+    },
+
+    openCloneProject(projectId, projectTitle) {
+      this.cloneForm = {
+        projectId,
+        originalTitle: projectTitle,
+        title: `${projectTitle}（克隆）`,
+      };
+      this.showCloneModal = true;
+      this.$nextTick(() => this.$refs.cloneTitleInput?.focus());
+    },
+
+    cloneProjectById(projectId, projectTitle = '') {
+      this.openCloneProject(projectId, projectTitle || projectId);
+    },
+
+    cloneProject() {
+      if (!this.selectedProjectId || !this.project?.project) return;
+      this.openCloneProject(this.selectedProjectId, this.project.project.title);
+    },
+
+    async confirmCloneProject() {
+      try {
+        const projectId = this.cloneForm.projectId;
+        if (!projectId) return;
+        const data = await this.api('POST', `/projects/${projectId}/clone`, {
+          title: this.cloneForm.title,
+        });
+        this.showCloneModal = false;
+        this.cloneForm = { projectId: '', originalTitle: '', title: '' };
+        await this.loadProjects();
+        await this.openProject(data.project.id);
+        this.showToast(`已克隆为 ${data.project.id}`);
+      } catch (e) {
+        this.showToast(e.message, 'error');
+      }
     },
 
     openCreateIntent() {

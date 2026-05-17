@@ -9,11 +9,12 @@ services:
       - "8000:8000"
     volumes:
       - ./datas/cairn/:/root/.local/share/cairn/
+      - ./datas/cairn-runtime:/cairn/.cairn-runtime
       - ./dispatch_docker.yaml:/cairn/dispatch.yaml
     environment:
       CAIRN_DISPATCH_CONFIG: /cairn/dispatch.yaml
       CAIRN_UI_DISPATCH_CONFIG: /root/.local/share/cairn/dispatch_ui.yaml
-      CAIRN_DISPATCH_SETTINGS_MODE: ${CAIRN_DISPATCH_SETTINGS_MODE:-file}
+      CAIRN_DISPATCH_SETTINGS_MODE: ${CAIRN_DISPATCH_SETTINGS_MODE:-ui}
     healthcheck:
       test:
         - "CMD"
@@ -41,7 +42,7 @@ services:
     environment:
       CAIRN_DISPATCH_CONFIG: /cairn/dispatch.yaml
       CAIRN_UI_DISPATCH_CONFIG: /root/.local/share/cairn/dispatch_ui.yaml
-      CAIRN_DISPATCH_SETTINGS_MODE: ${CAIRN_DISPATCH_SETTINGS_MODE:-file}
+      CAIRN_DISPATCH_SETTINGS_MODE: ${CAIRN_DISPATCH_SETTINGS_MODE:-ui}
     depends_on:
       cairn-server:
         condition: service_healthy

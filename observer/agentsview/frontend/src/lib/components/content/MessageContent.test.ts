@@ -34,6 +34,7 @@ vi.mock("../../stores/sessions.svelte.js", () => ({
 
 vi.mock("../../utils/highlight.js", () => ({
   applyHighlight: () => {},
+  escapeHTML: (value: string) => value,
 }));
 
 vi.mock("../../utils/clipboard.js", () => ({
@@ -113,6 +114,85 @@ describe("MessageContent", () => {
     expect(tokenMeta?.textContent?.replace(/\s+/g, " ").trim()).toBe(
       "— ctx / 180 out",
     );
+
+    unmount(component);
+  });
+
+  it("renders codex bash output in a structured tool block without duplicate markdown command text", async () => {
+    const component = mount(MessageContent, {
+      target: document.body,
+      props: {
+        message: makeMessage({
+          content: "[Bash]\n$ curl http://example.test",
+          has_tool_use: true,
+          content_length: 34,
+          tool_calls: [
+            {
+              tool_name: "exec_command",
+              category: "Bash",
+              input_json: JSON.stringify({ cmd: "curl http://example.test" }),
+              result_content: "HTTP/1.1 200 OK\nctfhub{demo-flag}",
+            },
+          ],
+        }),
+      },
+    });
+
+    await tick();
+
+    const markdownBlocks = Array.from(document.querySelectorAll(".text-content"));
+    expect(markdownBlocks).toHaveLength(0);
+
+    const toolLabel = document.querySelector(".tool-label");
+    expect(toolLabel?.textContent).toBe("Bash");
+
+    const outputHeader = document.querySelector<HTMLButtonElement>(".output-header");
+    expect(outputHeader).not.toBeNull();
+    expect(outputHeader?.textContent).toContain("HTTP/1.1 200 OK");
+
+    outputHeader!.click();
+    await tick();
+
+    const outputContent = document.querySelector(".output-content");
+    expect(outputContent).not.toBeNull();
+    expect(outputContent!.textContent).toContain("HTTP/1.1 200 OK");
+    expect(outputContent!.textContent).toContain("ctfhub{demo-flag}");
+
+    unmount(component);
+  });
+
+  it("renders cairn conclusion json as a structured summary card", async () => {
+    const component = mount(MessageContent, {
+      target: document.body,
+      props: {
+        message: makeMessage({
+          content: JSON.stringify({
+            accepted: true,
+            data: {
+              fact: {
+                description: "Confirmed SSRF bypass via numeric loopback and recovered ctfhub{demo-flag}.",
+              },
+              complete: {
+                description: "The project goal was to obtain the flag, and the application returned it directly.",
+              },
+            },
+          }),
+        }),
+      },
+    });
+
+    await tick();
+
+    const card = document.querySelector(".conclusion-card");
+    expect(card).not.toBeNull();
+    expect(card?.textContent).toContain("已完成");
+    expect(card?.textContent).toContain("已确认事实");
+    expect(card?.textContent).toContain("完成原因");
+    expect(card?.textContent).toContain("numeric loopback");
+    expect(card?.textContent).toContain("returned it directly");
+
+    const rawJson = document.body.textContent ?? "";
+    expect(rawJson).not.toContain('{"accepted":true');
 
     unmount(component);
   });

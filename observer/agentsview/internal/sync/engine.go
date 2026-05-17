@@ -5230,14 +5230,16 @@ func convertToolCalls(
 	calls := make([]db.ToolCall, len(parsed))
 	for i, tc := range parsed {
 		calls[i] = db.ToolCall{
-			SessionID:         sessionID,
-			ToolName:          tc.ToolName,
-			Category:          tc.Category,
-			ToolUseID:         tc.ToolUseID,
-			InputJSON:         tc.InputJSON,
-			SkillName:         tc.SkillName,
-			SubagentSessionID: tc.SubagentSessionID,
-			ResultEvents:      convertToolResultEvents(tc.ResultEvents),
+			SessionID:           sessionID,
+			ToolName:            tc.ToolName,
+			Category:            tc.Category,
+			ToolUseID:           tc.ToolUseID,
+			InputJSON:           tc.InputJSON,
+			SkillName:           tc.SkillName,
+			ResultContentLength: len(tc.ResultContent),
+			ResultContent:       tc.ResultContent,
+			SubagentSessionID:   tc.SubagentSessionID,
+			ResultEvents:        convertToolResultEvents(tc.ResultEvents),
 		}
 	}
 	return calls

@@ -11,7 +11,11 @@ from fastapi import HTTPException
 from cairn.dispatcher.config import DispatchConfig, TaskType, WorkerType
 from cairn.server.db import DEFAULT_DB
 from cairn.server.models import (
+    DispatchBootstrapTaskSettings,
+    DispatchExploreTaskSettings,
+    DispatchReasonTaskSettings,
     DispatchSettingsMode,
+    DispatchTaskSettings,
     DispatchRuntimeSettings,
     DispatchSettings,
     DispatchWorkerSettings,
@@ -107,6 +111,7 @@ def read_dispatch_settings(mode: DispatchSettingsMode | None = None) -> Dispatch
         path=str(path),
         writable=os.access(path, os.W_OK),
         runtime=DispatchRuntimeSettings(**runtime_raw),
+        tasks=_tasks_to_settings(raw.get("tasks") or {}),
         workers=[_worker_to_settings(worker) for worker in workers_raw],
         restart_required=True,
     )
@@ -124,12 +129,21 @@ def write_dispatch_settings(body: UpdateDispatchSettingsRequest) -> DispatchSett
     _validate_raw_dispatch_config(raw, path)
 
     raw["runtime"] = body.runtime.model_dump()
+    raw["tasks"] = body.tasks.model_dump()
     raw["workers"] = _merge_workers(raw.get("workers") or [], body.workers)
     _validate_raw_dispatch_config(raw, path)
 
     serialized = yaml.safe_dump(raw, sort_keys=False, allow_unicode=False)
     path.write_text(serialized, encoding="utf-8")
     return read_dispatch_settings(resolved_mode)
+
+
+def _tasks_to_settings(tasks_raw: dict[str, Any]) -> DispatchTaskSettings:
+    return DispatchTaskSettings(
+        bootstrap=DispatchBootstrapTaskSettings(**(tasks_raw.get("bootstrap") or {})),
+        reason=DispatchReasonTaskSettings(**(tasks_raw.get("reason") or {})),
+        explore=DispatchExploreTaskSettings(**(tasks_raw.get("explore") or {})),
+    )
 
 
 def _load_raw_config(path: Path) -> dict[str, Any]:
@@ -163,6 +177,7 @@ def _worker_to_settings(worker_raw: dict[str, Any]) -> DispatchWorkerSettings:
     return DispatchWorkerSettings(
         source_name=str(worker_raw.get("name", "")).strip(),
         name=str(worker_raw.get("name", "")).strip(),
+        enabled=bool(worker_raw.get("enabled", True)),
         type=worker_type,
         task_types=_normalize_task_types(worker_raw.get("task_types") or []),
         max_running=worker_raw["max_running"],
@@ -211,6 +226,7 @@ def _merge_workers(existing_workers: list[dict[str, Any]], edited_workers: list[
         merged.update(
             {
                 "name": worker.name,
+                "enabled": worker.enabled,
                 "type": worker.type,
                 "task_types": worker.task_types,
                 "max_running": worker.max_running,

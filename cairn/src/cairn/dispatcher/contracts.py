@@ -66,9 +66,12 @@ def validate_reason_payload(
     if accepted is False:
         return "rejected", None
     if accepted is None:
-        if not _looks_like_reason_data(payload):
-            raise ValueError("accepted must be true or false")
-        data = payload
+        if payload == {}:
+            data = {}
+        else:
+            if not _looks_like_reason_data(payload):
+                raise ValueError("accepted must be true or false")
+            data = payload
     if not isinstance(data, dict):
         raise ValueError("accepted must be true or false")
     complete = data.get("complete")
@@ -90,14 +93,10 @@ def validate_reason_payload(
         for i, intent in enumerate(intents):
             if not isinstance(intent, dict) or "from" not in intent or "description" not in intent:
                 raise ValueError(f"invalid intent at index {i}")
-        if not intents and open_intents_empty:
-            raise ValueError("intents must not be empty when open_intents is empty")
         intents = intents[:max_intents]
         if not intents:
             return "noop", None
         return "intents", intents
-    if open_intents_empty:
-        raise ValueError("intents is required when open_intents is empty")
     return "noop", None
 
 

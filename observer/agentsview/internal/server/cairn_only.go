@@ -45,15 +45,22 @@ func (s *Server) cairnSessions(ctx context.Context) (map[string]cairnSessionMeta
 	}
 	sessions := make(map[string]cairnSessionMeta, len(runs))
 	for _, run := range runs {
+		summary, ok := summaries[run.ProjectID]
+		if !ok {
+			continue
+		}
 		if run.SessionID != nil && *run.SessionID != "" {
-			summary := summaries[run.ProjectID]
 			meta := cairnSessionMeta{
 				Project: cairnProjectName(run.ProjectID),
 				Title:   cairnSessionTitle(run, summary),
 			}
-			sessions[*run.SessionID] = meta
+			if _, exists := sessions[*run.SessionID]; !exists {
+				sessions[*run.SessionID] = meta
+			}
 			for _, id := range cairnSessionIDVariants(run.AgentType, *run.SessionID) {
-				sessions[id] = meta
+				if _, exists := sessions[id]; !exists {
+					sessions[id] = meta
+				}
 			}
 		}
 	}
@@ -65,21 +72,73 @@ func cairnSessionTitle(run cairn.Run, summary cairn.ProjectSummary) string {
 	switch {
 	case strings.HasPrefix(run.Phase, "explore"):
 		if run.IntentID != nil {
-			title = summary.Intents[*run.IntentID]
+			title = cairnExploreTitle(*run.IntentID, summary)
 		}
 	case strings.HasPrefix(run.Phase, "reason"):
-		title = firstNonEmpty(summary.Goal, summary.Title)
-		if title != "" {
-			title = "Plan: " + title
-		}
+		title = cairnReasonTitle(run, summary)
 	case strings.HasPrefix(run.Phase, "bootstrap"):
-		title = joinTitleParts(summary.Goal, summary.Origin)
+		title = cairnBootstrapTitle(run, summary)
 	default:
 		if run.IntentID != nil {
-			title = summary.Intents[*run.IntentID]
+			title = cairnExploreTitle(*run.IntentID, summary)
 		}
 	}
 	return shortenTitle(firstNonEmpty(title, summary.Title))
+}
+
+func cairnBootstrapTitle(run cairn.Run, summary cairn.ProjectSummary) string {
+	if run.IntentID != nil {
+		if intent, ok := summary.Intents[*run.IntentID]; ok {
+			if factTitle := cairnFactTitle(intent.ToFactID, summary); factTitle != "" {
+				if strings.HasPrefix(run.Phase, "bootstrap_conclude") || run.Status == "success" {
+					return "事实: " + factTitle
+				}
+			}
+		}
+	}
+	title := joinTitleParts(summary.Goal, summary.Origin)
+	if title != "" {
+		return "起步: " + title
+	}
+	return title
+}
+
+func cairnReasonTitle(run cairn.Run, summary cairn.ProjectSummary) string {
+	if run.IntentID != nil {
+		if intent, ok := summary.Intents[*run.IntentID]; ok && intent.ToFactID == "goal" {
+			return "完成: " + firstNonEmpty(cairnFactTitle(intent.ToFactID, summary), summary.Goal, summary.Title)
+		}
+	}
+	title := firstNonEmpty(summary.Goal, summary.Title)
+	if title != "" {
+		return "计划: " + title
+	}
+	return title
+}
+
+func cairnExploreTitle(intentID string, summary cairn.ProjectSummary) string {
+	intent, ok := summary.Intents[intentID]
+	if !ok {
+		return ""
+	}
+	if factTitle := cairnFactTitle(intent.ToFactID, summary); factTitle != "" {
+		return "事实: " + factTitle
+	}
+	if intent.Description != "" {
+		return "探索: " + intent.Description
+	}
+	return ""
+}
+
+func cairnFactTitle(factID string, summary cairn.ProjectSummary) string {
+	factID = strings.TrimSpace(factID)
+	if factID == "" {
+		return ""
+	}
+	if factID == "goal" {
+		return firstNonEmpty(summary.Goal, summary.Title)
+	}
+	return summary.Facts[factID]
 }
 
 func joinTitleParts(parts ...string) string {

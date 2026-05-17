@@ -9,6 +9,7 @@
     previewMessage,
   } from "../../utils/messages.js";
   import StatusDot from "../common/StatusDot.svelte";
+  import { parseCairnTitleBadge } from "./cairn-title-badges.js";
 
   interface Props {
     session: Session;
@@ -118,6 +119,14 @@
     if (p.text) return { text: truncate(p.text, 50), isShell: p.isShell };
     return { text: truncate(session.project, 30), isShell: false };
   });
+
+  let cairnTitleBadge = $derived(
+    parseCairnTitleBadge(
+      session.project,
+      displayLabel.text,
+      displayLabel.isShell,
+    ),
+  );
 
   let timeStr = $derived(
     formatRelativeTime(session.ended_at ?? session.started_at),
@@ -306,10 +315,23 @@
       <div
         class="session-name"
         class:shell={displayLabel.isShell}
+        class:with-badge={!!cairnTitleBadge}
         ondblclick={handleDblClick}
       >
         {#if displayLabel.isShell}
           <code>{displayLabel.text}</code>
+        {:else if cairnTitleBadge}
+          <span
+            class="cairn-badge"
+            class:badge-bootstrap={cairnTitleBadge.kind === "bootstrap"}
+            class:badge-plan={cairnTitleBadge.kind === "plan"}
+            class:badge-explore={cairnTitleBadge.kind === "explore"}
+            class:badge-fact={cairnTitleBadge.kind === "fact"}
+            class:badge-done={cairnTitleBadge.kind === "done"}
+          >
+            {cairnTitleBadge.label}
+          </span>
+          <span class="session-title-text">{cairnTitleBadge.text}</span>
         {:else}
           {displayLabel.text}
         {/if}
@@ -515,6 +537,61 @@
     letter-spacing: -0.005em;
   }
 
+  .session-name.with-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .session-title-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cairn-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    min-width: 0;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.45;
+    letter-spacing: 0;
+    opacity: 0.96;
+  }
+
+  .badge-bootstrap {
+    background: color-mix(in srgb, #7f94b8 18%, transparent);
+    color: #8ea2c4;
+  }
+
+  .badge-plan {
+    background: color-mix(in srgb, #5ea0ff 18%, transparent);
+    color: #72adff;
+  }
+
+  .badge-explore {
+    background: color-mix(in srgb, #a16eff 18%, transparent);
+    color: #b18aff;
+  }
+
+  .badge-fact {
+    background: color-mix(in srgb, #35c7b3 18%, transparent);
+    color: #4acdbb;
+  }
+
+  .badge-done {
+    background: color-mix(in srgb, #49c26b 18%, transparent);
+    color: #67cf84;
+  }
+
   .session-name.shell > code {
     font-family: var(--font-mono);
     font-size: 0.95em;
@@ -528,6 +605,12 @@
   .compact .session-name {
     font-size: 12px;
     color: var(--text-secondary);
+  }
+
+  .compact .cairn-badge {
+    padding: 0 6px;
+    font-size: 9px;
+    line-height: 1.4;
   }
 
   .rename-input {

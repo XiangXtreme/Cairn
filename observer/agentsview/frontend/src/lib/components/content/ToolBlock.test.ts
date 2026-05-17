@@ -44,7 +44,7 @@ describe("ToolBlock output section", () => {
     expect(document.querySelector(".output-header")).toBeNull();
   });
 
-  it("renders output-header after expanding the tool block when result_content is set", async () => {
+  it("renders output-header only after expanding the tool block when result_content is set", async () => {
     const toolCall: ToolCall = {
       tool_name: "Read",
       category: "file",
@@ -56,13 +56,9 @@ describe("ToolBlock output section", () => {
     });
     await tick();
 
-    // Output section is inside the collapsed block — not visible yet.
     expect(document.querySelector(".output-header")).toBeNull();
 
-    // Expand the main tool block.
-    const toolHeader = document.querySelector<HTMLButtonElement>(".tool-header");
-    expect(toolHeader).not.toBeNull();
-    toolHeader!.click();
+    document.querySelector<HTMLButtonElement>(".tool-header")!.click();
     await tick();
 
     expect(document.querySelector(".output-header")).not.toBeNull();
