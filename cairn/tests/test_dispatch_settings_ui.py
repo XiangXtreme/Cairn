@@ -256,6 +256,49 @@ def test_disabled_worker_does_not_require_credentials_in_ui_mode(tmp_path: Path,
     assert "enabled: false" in compiled
 
 
+def test_app_enabled_skill_is_injected_without_worker_binding(tmp_path: Path, monkeypatch) -> None:
+    db_path = tmp_path / "cairn.db"
+    db._db_path = None
+    db.configure(db_path)
+
+    dispatch_path = tmp_path / "dispatch.yaml"
+    _write_dispatch(dispatch_path)
+
+    monkeypatch.setenv("CAIRN_DISPATCH_CONFIG", str(dispatch_path))
+    monkeypatch.setenv("CAIRN_UI_DISPATCH_CONFIG", str(tmp_path / "datas" / "cairn" / "dispatch_ui.yaml"))
+    monkeypatch.setenv("CAIRN_DISPATCH_SETTINGS_MODE", "ui")
+
+    client = TestClient(app)
+    response = client.get("/settings/dispatch?mode=ui")
+    assert response.status_code == 200
+    payload = response.json()
+    payload["skills"] = [
+        {
+            "id": "redis-protocol",
+            "name": "Redis Protocol",
+            "enabled": True,
+            "path": "/tmp/redis-protocol",
+            "description": "Redis SSRF skill",
+            "enabled_claude": False,
+            "enabled_codex": True,
+        }
+    ]
+    payload["worker_bindings"] = [
+        {
+            "worker_name": payload["workers"][0]["name"],
+            "mcp_server_ids": [],
+            "skill_ids": [],
+        }
+    ]
+
+    saved = client.put("/settings/dispatch", json=payload)
+    assert saved.status_code == 200, saved.text
+
+    compiled = (tmp_path / "datas" / "cairn" / "dispatch_ui.yaml").read_text(encoding="utf-8")
+    assert "CAIRN_SKILLS:" in compiled
+    assert "redis-protocol" in compiled
+
+
 def test_ui_settings_hides_runtime_injected_env_from_editable_extra_env(tmp_path: Path, monkeypatch) -> None:
     db_path = tmp_path / "cairn.db"
     db._db_path = None

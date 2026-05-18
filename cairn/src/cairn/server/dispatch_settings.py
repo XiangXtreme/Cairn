@@ -558,12 +558,13 @@ def _merge_workers(
         else:
             env.pop(_MCP_ENV_KEY, None)
 
-        if binding and _SKILL_SUPPORT_MATRIX[worker.type]:
+        if _SKILL_SUPPORT_MATRIX[worker.type]:
+            bound_skill_ids = set(binding.skill_ids) if binding else set()
             enabled_skills = [
                 _serialize_skill_spec(item)
                 for item in skills or []
                 if item.enabled
-                and item.id in binding.skill_ids
+                and (item.id in bound_skill_ids or _skill_enabled_for_worker(item, worker.type))
                 and _skill_enabled_for_worker(item, worker.type)
             ]
             if enabled_skills:
