@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
@@ -133,8 +134,27 @@ def resolve_registry_mcp_root_path() -> Path:
 def resolve_skill_scan_roots() -> tuple[Path, ...]:
     return (
         resolve_registry_skills_root_path(),
+        *resolve_repo_skill_roots(),
         Path.cwd() / "datas" / "cairn-runtime" / "skills",
     )
+
+
+def resolve_repo_skill_roots() -> tuple[Path, ...]:
+    roots: list[Path] = []
+    seen: set[Path] = set()
+    for candidate in (
+        Path.cwd() / "skills",
+        Path(__file__).resolve().parents[4] / "skills",
+    ):
+        try:
+            resolved = candidate.resolve()
+        except OSError:
+            resolved = candidate
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        roots.append(candidate)
+    return tuple(roots)
 
 
 def resolve_dispatch_settings_mode(mode: DispatchSettingsMode | None = None) -> DispatchSettingsMode:
@@ -158,6 +178,7 @@ def read_dispatch_settings(mode: DispatchSettingsMode | None = None) -> Dispatch
     resolved_mode = resolve_dispatch_settings_mode(mode)
     if resolved_mode == "ui":
         ensure_ui_dispatch_bundle(create=True)
+        _sync_repo_skills_to_registry()
 
     path = resolve_dispatch_settings_path(resolved_mode, create_ui=resolved_mode == "ui")
     if not path.exists():
@@ -256,7 +277,9 @@ def discover_skills(mode: DispatchSettingsMode | None = None) -> list[Discovered
             skill = _build_discovered_skill(skill_dir, registered_ids)
             if skill is None:
                 continue
-            discovered.setdefault(skill.path, skill)
+            current = discovered.get(skill.id)
+            if current is None or _discovered_skill_priority(skill) < _discovered_skill_priority(current):
+                discovered[skill.id] = skill
     return sorted(discovered.values(), key=lambda item: (item.already_registered, item.name.lower(), item.path.lower()))
 
 
@@ -729,9 +752,47 @@ def _classify_skill_source(path: Path) -> str:
     return "container"
 
 
+def _discovered_skill_priority(skill: DiscoveredSkill) -> int:
+    order = {
+        "registry": 0,
+        "runtime": 1,
+        "project": 2,
+        "container": 3,
+    }
+    return order.get(skill.source, 99)
+
+
 def _ensure_registry_layout() -> None:
     resolve_registry_skills_root_path().mkdir(parents=True, exist_ok=True)
     resolve_registry_mcp_root_path().mkdir(parents=True, exist_ok=True)
+
+
+def _sync_repo_skills_to_registry() -> None:
+    registry_root = resolve_registry_skills_root_path()
+    _ensure_registry_layout()
+    synced_ids: set[str] = set()
+    for repo_root in resolve_repo_skill_roots():
+        if not repo_root.exists():
+            continue
+        for skill_dir in _iter_skill_dirs(repo_root):
+            skill_id = _slugify_skill_id(skill_dir.name)
+            if skill_id in synced_ids:
+                continue
+            target_dir = registry_root / skill_id
+            if _sync_skill_dir(skill_dir, target_dir):
+                synced_ids.add(skill_id)
+                skill_file = target_dir / "SKILL.md"
+                if not skill_file.exists() and (skill_dir / "SKILL.md").exists():
+                    shutil.copy2(skill_dir / "SKILL.md", skill_file)
+
+
+def _sync_skill_dir(source_dir: Path, target_dir: Path) -> bool:
+    if not source_dir.exists():
+        return False
+    if target_dir.exists():
+        shutil.rmtree(target_dir)
+    shutil.copytree(source_dir, target_dir)
+    return True
 
 
 def _providers_from_file_workers(workers_raw: list[dict[str, Any]]) -> list[ProviderSettings]:

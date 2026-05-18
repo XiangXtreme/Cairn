@@ -10,6 +10,7 @@ services:
     volumes:
       - ./datas/cairn/:/root/.local/share/cairn/
       - ./datas/cairn-runtime:/cairn/.cairn-runtime
+      - ./skills:/cairn/skills:ro
       - ./dispatch_docker.yaml:/cairn/dispatch.yaml
     environment:
       CAIRN_DISPATCH_CONFIG: /cairn/dispatch.yaml
@@ -39,6 +40,7 @@ services:
       - ./dispatch_docker.yaml:/cairn/dispatch.yaml:ro
       - ./datas/cairn/:/root/.local/share/cairn/
       - ./datas/cairn-runtime:/cairn/.cairn-runtime
+      - ./skills:/cairn/skills:ro
     environment:
       CAIRN_DISPATCH_CONFIG: /cairn/dispatch.yaml
       CAIRN_UI_DISPATCH_CONFIG: /root/.local/share/cairn/dispatch_ui.yaml

@@ -360,7 +360,46 @@ def test_discover_skills_prefers_ui_registry_root(tmp_path: Path, monkeypatch) -
     payload = client.get("/settings/dispatch/skills/discover?mode=ui")
     assert payload.status_code == 200
     data = payload.json()
-    registry_items = [item for item in data if item["source"] == "registry"]
+    registry_items = [item for item in data if item["source"] == "registry" and item["id"] == "web-ssrf"]
     assert len(registry_items) == 1
-    assert registry_items[0]["id"] == "web-ssrf"
     assert registry_items[0]["path"].endswith("datas/cairn/registry/skills/web-ssrf")
+
+
+def test_discover_skills_syncs_repo_skill_into_registry(tmp_path: Path, monkeypatch) -> None:
+    db_path = tmp_path / "cairn.db"
+    db._db_path = None
+    db.configure(db_path)
+
+    dispatch_path = tmp_path / "dispatch.yaml"
+    _write_dispatch(dispatch_path)
+
+    monkeypatch.setenv("CAIRN_DISPATCH_CONFIG", str(dispatch_path))
+    monkeypatch.setenv("CAIRN_UI_DISPATCH_CONFIG", str(tmp_path / "datas" / "cairn" / "dispatch_ui.yaml"))
+    monkeypatch.setenv("CAIRN_DISPATCH_SETTINGS_MODE", "ui")
+
+    repo_skill = tmp_path / "skills" / "web-ssrf"
+    repo_skill.mkdir(parents=True, exist_ok=True)
+    (repo_skill / "SKILL.md").write_text(
+        "---\nname: web-ssrf\n---\n# Web SSRF\n\nFresh repo skill.\n",
+        encoding="utf-8",
+    )
+
+    registry_skill = tmp_path / "datas" / "cairn" / "registry" / "skills" / "web-ssrf"
+    registry_skill.mkdir(parents=True, exist_ok=True)
+    (registry_skill / "SKILL.md").write_text("# Web SSRF\n\nStale registry skill.\n", encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path)
+
+    client = TestClient(app)
+    payload = client.get("/settings/dispatch/skills/discover?mode=ui")
+    assert payload.status_code == 200
+    data = payload.json()
+
+    registry_items = [item for item in data if item["id"] == "web-ssrf"]
+    assert len(registry_items) == 1
+    assert registry_items[0]["source"] == "registry"
+    assert registry_items[0]["path"].endswith("datas/cairn/registry/skills/web-ssrf")
+
+    synced = (registry_skill / "SKILL.md").read_text(encoding="utf-8")
+    assert "Fresh repo skill." in synced
+    assert "Stale registry skill." not in synced
