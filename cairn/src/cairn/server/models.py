@@ -244,6 +244,28 @@ class UpdateDispatchSettingsRequest(BaseModel):
     worker_bindings: list[WorkerBindingSettings] = Field(default_factory=list)
 
 
+class WorkerHealthcheckRequest(BaseModel):
+    mode: DispatchSettingsMode = "file"
+    runtime: DispatchRuntimeSettings | None = None
+    worker: DispatchWorkerSettings
+    providers: list[ProviderSettings] = Field(default_factory=list)
+    mcp_servers: list[McpServerSettings] = Field(default_factory=list)
+    skills: list[SkillSettings] = Field(default_factory=list)
+    worker_bindings: list[WorkerBindingSettings] = Field(default_factory=list)
+
+
+class WorkerHealthcheckResponse(BaseModel):
+    ok: bool
+    worker_name: str
+    worker_type: WorkerType
+    returncode: int
+    duration_ms: int
+    http_status: str | None = None
+    response_preview: str = ""
+    stderr_preview: str = ""
+    command: str = ""
+
+
 class Fact(BaseModel):
     id: str
     description: str

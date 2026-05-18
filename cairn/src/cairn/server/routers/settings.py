@@ -1,8 +1,8 @@
 from fastapi import APIRouter
 
-from cairn.server.dispatch_settings import discover_skills, read_dispatch_settings, write_dispatch_settings
+from cairn.server.dispatch_settings import discover_skills, read_dispatch_settings, run_worker_healthcheck, write_dispatch_settings
 from cairn.server.db import get_conn
-from cairn.server.models import DiscoveredSkill, DispatchSettings, DispatchSettingsMode, Settings, UpdateDispatchSettingsRequest
+from cairn.server.models import DiscoveredSkill, DispatchSettings, DispatchSettingsMode, Settings, UpdateDispatchSettingsRequest, WorkerHealthcheckRequest, WorkerHealthcheckResponse
 
 router = APIRouter(tags=["settings"])
 
@@ -37,3 +37,8 @@ def update_dispatch_settings(body: UpdateDispatchSettingsRequest):
 @router.get("/settings/dispatch/skills/discover", response_model=list[DiscoveredSkill])
 def get_discovered_skills(mode: DispatchSettingsMode | None = None):
     return discover_skills(mode)
+
+
+@router.post("/settings/dispatch/workers/healthcheck", response_model=WorkerHealthcheckResponse)
+def post_worker_healthcheck(body: WorkerHealthcheckRequest):
+    return run_worker_healthcheck(body)

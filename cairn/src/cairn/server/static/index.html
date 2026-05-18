@@ -790,6 +790,11 @@
                   </div>
                 </div>
                 <div class="flex shrink-0 items-center gap-2">
+                  <button @click="testWorkerHealthcheck(worker)"
+                    :disabled="worker.is_testing_healthcheck || worker.type === 'mock'"
+                    class="rounded-xl border border-brand-200 px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50 transition disabled:opacity-40 disabled:cursor-not-allowed">
+                    <span x-text="worker.is_testing_healthcheck ? '测试中...' : '测试模型'"></span>
+                  </button>
                   <button @click="toggleDispatchWorkerEnabled(worker)"
                     class="rounded-xl border px-3 py-2 text-sm font-medium transition"
                     :class="worker.enabled === false ? 'border-teal-200 text-teal-700 hover:bg-teal-50' : 'border-slate-200 text-slate-600 hover:bg-slate-50'">
@@ -835,6 +840,37 @@
                   <div class="mt-1 text-sm font-medium text-slate-800" x-text="workerBindingSummary(worker).skill"></div>
                   <div class="mt-1 text-xs text-slate-500" x-text="workerBindingSummary(worker).skillDetail"></div>
                 </div>
+              </div>
+
+              <div class="mt-4 rounded-2xl border px-4 py-3"
+                x-show="worker.healthcheck"
+                :class="worker.healthcheck?.ok ? 'border-emerald-200 bg-emerald-50/70' : 'border-rose-200 bg-rose-50/70'">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full px-2.5 py-1 text-[10px] font-semibold"
+                    :class="worker.healthcheck?.ok ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-rose-100 text-rose-700 border border-rose-200'"
+                    x-text="worker.healthcheck?.ok ? '连通成功' : '连通失败'"></span>
+                  <span class="text-xs text-slate-500" x-text="`耗时 ${worker.healthcheck?.duration_ms || 0} ms`"></span>
+                  <span class="text-xs text-slate-500" x-show="worker.healthcheck?.http_status" x-text="`HTTP ${worker.healthcheck?.http_status}`"></span>
+                  <span class="text-xs text-slate-500" x-text="`退出码 ${worker.healthcheck?.returncode}`"></span>
+                </div>
+                <template x-if="worker.healthcheck?.command">
+                  <div class="mt-3">
+                    <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">测试命令</div>
+                    <pre class="mt-1 overflow-x-auto rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-[11px] leading-5 text-slate-600" x-text="worker.healthcheck.command"></pre>
+                  </div>
+                </template>
+                <template x-if="worker.healthcheck?.response_preview">
+                  <div class="mt-3">
+                    <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">响应预览</div>
+                    <div class="mt-1 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-xs leading-5 text-slate-700 break-all" x-text="worker.healthcheck.response_preview"></div>
+                  </div>
+                </template>
+                <template x-if="worker.healthcheck?.stderr_preview">
+                  <div class="mt-3">
+                    <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">错误预览</div>
+                    <div class="mt-1 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-xs leading-5 text-slate-700 break-all" x-text="worker.healthcheck.stderr_preview"></div>
+                  </div>
+                </template>
               </div>
 
               <div class="mt-4 rounded-2xl border border-slate-200 bg-white/80 p-4" x-show="worker.type !== 'mock'">
@@ -2651,6 +2687,8 @@ function cairnApp() {
             mcp_supported: worker.mcp_supported !== false,
             skill_supported: worker.skill_supported === true,
             show_legacy_provider: false,
+            healthcheck: null,
+            is_testing_healthcheck: false,
           })),
           mcp_servers: (payload.mcp_servers || []).map((server) => ({
             id: server.id || '',
@@ -2772,6 +2810,8 @@ function cairnApp() {
         mcp_supported: true,
         skill_supported: true,
         show_legacy_provider: false,
+        healthcheck: null,
+        is_testing_healthcheck: false,
       };
     },
 
@@ -2876,6 +2916,95 @@ function cairnApp() {
     selectedProviderForWorker(worker) {
       if (!worker?.provider_id) return null;
       return (this.dispatchForm.providers || []).find((provider) => provider.id === worker.provider_id) || null;
+    },
+
+    async testWorkerHealthcheck(worker) {
+      if (!worker || worker.is_testing_healthcheck) return;
+      worker.is_testing_healthcheck = true;
+      worker.healthcheck = null;
+      try {
+        const payload = {
+          mode: this.dispatchSettingsMode,
+          runtime: { ...this.dispatchForm.runtime },
+          worker: {
+            source_name: worker.source_name || '',
+            name: worker.name || '',
+            enabled: worker.enabled !== false,
+            type: worker.type,
+            task_types: worker.task_types || [],
+            max_running: Number(worker.max_running || 1),
+            priority: Number(worker.priority || 0),
+            provider_id: worker.provider_id || '',
+            provider_supported: worker.provider_supported !== false,
+            model: worker.model || '',
+            base_url: worker.base_url || '',
+            auth_token: worker.auth_token || '',
+            has_auth_token: !!worker.has_auth_token,
+            provider_api: worker.provider_api || '',
+            context_window: worker.context_window === '' || worker.context_window == null ? null : Number(worker.context_window),
+            extra_env: this.sanitizeExtraEnv(worker.extra_env || {}),
+            mcp_server_ids: Array.isArray(worker.mcp_server_ids) ? [...worker.mcp_server_ids] : [],
+            skill_ids: Array.isArray(worker.skill_ids) ? [...worker.skill_ids] : [],
+            mcp_supported: worker.mcp_supported !== false,
+            skill_supported: worker.skill_supported === true,
+          },
+          providers: this.dispatchForm.providers.map((provider) => ({
+            id: provider.id || '',
+            name: provider.name || '',
+            enabled: provider.enabled !== false,
+            kind: provider.kind,
+            model: provider.model || '',
+            base_url: provider.base_url || '',
+            auth_token: provider.auth_token || '',
+            has_auth_token: !!provider.has_auth_token,
+            provider_api: provider.provider_api || '',
+            context_window: provider.context_window === '' || provider.context_window == null ? null : Number(provider.context_window),
+            extra_env: this.sanitizeExtraEnv(provider.extra_env || {}),
+          })),
+          mcp_servers: this.dispatchForm.mcp_servers.map((server) => ({
+            id: server.id || '',
+            name: server.name || '',
+            enabled: server.enabled !== false,
+            transport: server.transport,
+            command: server.command || '',
+            url: server.url || '',
+            args: Array.isArray(server.args) ? [...server.args] : [],
+            env: server.env || {},
+          })),
+          skills: this.dispatchForm.skills.map((skill) => ({
+            id: skill.id || '',
+            name: skill.name || '',
+            enabled: skill.enabled !== false,
+            path: skill.path || '',
+            description: skill.description || '',
+            enabled_claude: skill.enabled_claude === true,
+            enabled_codex: skill.enabled_codex === true,
+          })),
+          worker_bindings: this.dispatchForm.workers.map((item) => ({
+            worker_name: item.name || '',
+            mcp_server_ids: Array.isArray(item.mcp_server_ids) ? [...item.mcp_server_ids] : [],
+            skill_ids: Array.isArray(item.skill_ids) ? [...item.skill_ids] : [],
+          })),
+        };
+        const result = await this.api('POST', '/settings/dispatch/workers/healthcheck', payload);
+        worker.healthcheck = result;
+        this.showToast(result.ok ? `Worker ${worker.name} 测试成功` : `Worker ${worker.name} 测试失败`, result.ok ? 'success' : 'error');
+      } catch (e) {
+        worker.healthcheck = {
+          ok: false,
+          worker_name: worker.name || '',
+          worker_type: worker.type || '',
+          returncode: 1,
+          duration_ms: 0,
+          http_status: '',
+          response_preview: '',
+          stderr_preview: e.message || '测试失败',
+          command: '',
+        };
+        this.showToast(e.message, 'error');
+      } finally {
+        worker.is_testing_healthcheck = false;
+      }
     },
 
     toggleDispatchWorkerTask(worker, taskType) {
@@ -3386,6 +3515,8 @@ function cairnApp() {
             mcp_supported: worker.mcp_supported !== false,
             skill_supported: worker.skill_supported === true,
             show_legacy_provider: false,
+            healthcheck: null,
+            is_testing_healthcheck: false,
           })),
           mcp_servers: (saved.mcp_servers || []).map((server) => ({
             id: server.id || '',

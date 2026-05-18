@@ -4,6 +4,7 @@ import json
 import os
 import re
 import shutil
+import tempfile
 from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,6 +14,9 @@ import yaml
 from fastapi import HTTPException
 
 from cairn.dispatcher.config import DispatchConfig, TaskType, WorkerType
+from cairn.dispatcher.runtime.manager import create_runtime_manager
+from cairn.dispatcher.tasks.common import run_healthcheck
+from cairn.dispatcher.workers.registry import get_driver
 from cairn.server.db import DEFAULT_DB
 from cairn.server.models import (
     DispatchBootstrapTaskSettings,
@@ -28,6 +32,8 @@ from cairn.server.models import (
     McpServerSettings,
     ProviderSettings,
     SkillSettings,
+    WorkerHealthcheckRequest,
+    WorkerHealthcheckResponse,
     UpdateDispatchSettingsRequest,
     WorkerBindingSettings,
 )
@@ -281,6 +287,122 @@ def discover_skills(mode: DispatchSettingsMode | None = None) -> list[Discovered
             if current is None or _discovered_skill_priority(skill) < _discovered_skill_priority(current):
                 discovered[skill.id] = skill
     return sorted(discovered.values(), key=lambda item: (item.already_registered, item.name.lower(), item.path.lower()))
+
+
+def run_worker_healthcheck(body: WorkerHealthcheckRequest) -> WorkerHealthcheckResponse:
+    settings = read_dispatch_settings(body.mode)
+    runtime = body.runtime or settings.runtime
+    path = resolve_dispatch_settings_path(body.mode, create_ui=body.mode == "ui")
+    existing_workers: list[dict[str, Any]] = []
+    if path.exists():
+        raw = _load_raw_config(path)
+        existing_workers = raw.get("workers") or []
+    merged_workers = _merge_workers(
+        existing_workers=existing_workers,
+        edited_workers=[body.worker],
+        providers=body.providers,
+        mcp_servers=body.mcp_servers,
+        worker_bindings=body.worker_bindings,
+        skills=body.skills,
+    )
+    temp_runtime_root = Path(tempfile.mkdtemp(prefix="cairn-healthcheck-"))
+    try:
+        temp_config = DispatchConfig.model_validate(
+            {
+                "server": "http://127.0.0.1:8000",
+                "runtime": {
+                    "interval": runtime.interval,
+                    "max_workers": 1,
+                    "max_running_projects": 1,
+                    "max_project_workers": 1,
+                    "healthcheck_timeout": runtime.healthcheck_timeout,
+                    "prompt_group": runtime.prompt_group,
+                },
+                "tasks": {
+                    "bootstrap": {
+                        "timeout": settings.tasks.bootstrap.timeout,
+                        "conclude_timeout": settings.tasks.bootstrap.conclude_timeout,
+                    },
+                    "reason": {
+                        "timeout": settings.tasks.reason.timeout,
+                        "max_intents": settings.tasks.reason.max_intents,
+                        "allow_unavailable_dispatch": settings.tasks.reason.allow_unavailable_dispatch,
+                        "unavailable_fact_limit": settings.tasks.reason.unavailable_fact_limit,
+                    },
+                    "explore": {
+                        "timeout": settings.tasks.explore.timeout,
+                        "conclude_timeout": settings.tasks.explore.conclude_timeout,
+                    },
+                },
+                "execution": {
+                    "backend": "local",
+                    "work_dir": temp_runtime_root,
+                },
+                "workers": merged_workers,
+            }
+        )
+    except Exception as exc:
+        raise HTTPException(400, f"Invalid worker healthcheck config: {exc}") from exc
+    worker_config = temp_config.workers[0]
+    driver = get_driver(worker_config.type)
+    runtime_manager = create_runtime_manager(temp_config)
+    workspace_name = runtime_manager.ensure_startup_workspace()
+    result = run_healthcheck(
+        runtime_manager,
+        workspace_name,
+        worker_config,
+        driver.build_startup_healthcheck(worker_config),
+        timeout_seconds=runtime.healthcheck_timeout,
+    )
+    try:
+        return _to_worker_healthcheck_result(worker_config.name, worker_config.type, driver.describe_startup_healthcheck(worker_config), result)
+    finally:
+        runtime_manager.close()
+        shutil.rmtree(temp_runtime_root, ignore_errors=True)
+
+
+def _to_worker_healthcheck_result(
+    worker_name: str,
+    worker_type: WorkerType,
+    command: str,
+    result: Any,
+) -> WorkerHealthcheckResponse:
+    stdout = result.result.stdout if hasattr(result, "result") else ""
+    stderr = result.result.stderr if hasattr(result, "result") else ""
+    returncode = result.result.returncode if hasattr(result, "result") else 1
+    duration_ms = result.duration_ms if hasattr(result, "duration_ms") else 0
+    http_status, response_preview = _parse_healthcheck_stdout(stdout)
+    return WorkerHealthcheckResponse(
+        ok=returncode == 0,
+        worker_name=worker_name,
+        worker_type=worker_type,
+        returncode=returncode,
+        duration_ms=duration_ms,
+        http_status=http_status,
+        response_preview=response_preview,
+        stderr_preview=_preview_healthcheck_text(stderr),
+        command=command,
+    )
+
+
+def _parse_healthcheck_stdout(stdout: str) -> tuple[str | None, str]:
+    lines = stdout.splitlines()
+    http_status: str | None = None
+    body_lines: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if http_status is None and stripped.startswith("http_status="):
+            http_status = stripped.partition("=")[2] or None
+            continue
+        body_lines.append(line)
+    return http_status, _preview_healthcheck_text("\n".join(body_lines))
+
+
+def _preview_healthcheck_text(text: str, limit: int = 240) -> str:
+    compact = " ".join(text.split())
+    if len(compact) <= limit:
+        return compact
+    return compact[:limit] + "..."
 
 
 def ensure_ui_dispatch_bundle(*, create: bool) -> None:

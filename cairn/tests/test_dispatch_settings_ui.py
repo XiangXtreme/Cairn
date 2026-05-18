@@ -403,3 +403,63 @@ def test_discover_skills_syncs_repo_skill_into_registry(tmp_path: Path, monkeypa
     synced = (registry_skill / "SKILL.md").read_text(encoding="utf-8")
     assert "Fresh repo skill." in synced
     assert "Stale registry skill." not in synced
+
+
+def test_worker_healthcheck_endpoint_returns_mock_result(tmp_path: Path, monkeypatch) -> None:
+    db_path = tmp_path / "cairn.db"
+    db._db_path = None
+    db.configure(db_path)
+
+    dispatch_path = tmp_path / "dispatch.yaml"
+    _write_dispatch(dispatch_path)
+
+    monkeypatch.setenv("CAIRN_DISPATCH_CONFIG", str(dispatch_path))
+    monkeypatch.setenv("CAIRN_UI_DISPATCH_CONFIG", str(tmp_path / "datas" / "cairn" / "dispatch_ui.yaml"))
+    monkeypatch.setenv("CAIRN_DISPATCH_SETTINGS_MODE", "ui")
+
+    client = TestClient(app)
+    response = client.post(
+        "/settings/dispatch/workers/healthcheck",
+        json={
+            "mode": "ui",
+            "runtime": {
+                "interval": 3,
+                "max_workers": 1,
+                "max_running_projects": 1,
+                "max_project_workers": 1,
+                "healthcheck_timeout": 5,
+                "prompt_group": "default",
+            },
+            "worker": {
+                "source_name": "",
+                "name": "mock_probe",
+                "enabled": True,
+                "type": "mock",
+                "task_types": ["reason"],
+                "max_running": 1,
+                "priority": 0,
+                "provider_id": "",
+                "provider_supported": False,
+                "model": "",
+                "base_url": "",
+                "auth_token": "",
+                "has_auth_token": False,
+                "provider_api": "",
+                "context_window": None,
+                "extra_env": {},
+                "mcp_server_ids": [],
+                "skill_ids": [],
+                "mcp_supported": False,
+                "skill_supported": False,
+            },
+            "providers": [],
+            "mcp_servers": [],
+            "skills": [],
+            "worker_bindings": [],
+        },
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["worker_name"] == "mock_probe"
+    assert data["worker_type"] == "mock"
+    assert data["ok"] is True
