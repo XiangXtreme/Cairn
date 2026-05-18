@@ -204,6 +204,46 @@ def test_ui_dispatch_settings_bundle_and_compiled_yaml(tmp_path: Path, monkeypat
     assert "enabled: false" in compiled
 
 
+def test_ui_dispatch_settings_preserves_auth_token_when_secret_field_is_blank(tmp_path: Path, monkeypatch) -> None:
+    db_path = tmp_path / "cairn.db"
+    db._db_path = None
+    db.configure(db_path)
+
+    dispatch_path = tmp_path / "dispatch.yaml"
+    _write_dispatch(dispatch_path)
+
+    monkeypatch.setenv("CAIRN_DISPATCH_CONFIG", str(dispatch_path))
+    monkeypatch.setenv("CAIRN_UI_DISPATCH_CONFIG", str(tmp_path / "datas" / "cairn" / "dispatch_ui.yaml"))
+    monkeypatch.setenv("CAIRN_DISPATCH_SETTINGS_MODE", "ui")
+
+    client = TestClient(app)
+    initial = client.get("/settings/dispatch?mode=ui")
+    assert initial.status_code == 200
+    payload = initial.json()
+
+    payload["providers"][0]["auth_token"] = "sk-first"
+    payload["providers"][0]["has_auth_token"] = True
+    payload["workers"][0]["provider_id"] = payload["providers"][0]["id"]
+    first_save = client.put("/settings/dispatch", json=payload)
+    assert first_save.status_code == 200, first_save.text
+
+    second_payload = first_save.json()
+    second_payload["providers"][0]["auth_token"] = ""
+    second_payload["providers"][0]["has_auth_token"] = True
+    second_payload["providers"][0]["model"] = "gpt-5.5"
+
+    second_save = client.put("/settings/dispatch", json=second_payload)
+    assert second_save.status_code == 200, second_save.text
+
+    bundle_root = tmp_path / "datas" / "cairn" / "dispatch_ui"
+    providers_json = json.loads((bundle_root / "providers.json").read_text(encoding="utf-8"))
+    assert providers_json[0]["auth_token"] == "sk-first"
+
+    compiled = (tmp_path / "datas" / "cairn" / "dispatch_ui.yaml").read_text(encoding="utf-8")
+    assert "OPENAI_API_KEY: sk-first" in compiled
+    assert "CODEX_MODEL: gpt-5.5" in compiled
+
+
 def test_disabled_worker_does_not_require_credentials_in_ui_mode(tmp_path: Path, monkeypatch) -> None:
     db_path = tmp_path / "cairn.db"
     db._db_path = None

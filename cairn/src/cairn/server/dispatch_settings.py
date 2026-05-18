@@ -5,6 +5,8 @@ import os
 import re
 import shutil
 import tempfile
+import base64
+import zipfile
 from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
@@ -31,6 +33,8 @@ from cairn.server.models import (
     DispatchWorkerSettings,
     McpServerSettings,
     ProviderSettings,
+    SkillZipImportRequest,
+    SkillZipImportResponse,
     SkillSettings,
     WorkerHealthcheckRequest,
     WorkerHealthcheckResponse,
@@ -289,6 +293,69 @@ def discover_skills(mode: DispatchSettingsMode | None = None) -> list[Discovered
     return sorted(discovered.values(), key=lambda item: (item.already_registered, item.name.lower(), item.path.lower()))
 
 
+def import_skill_zip(body: SkillZipImportRequest) -> SkillZipImportResponse:
+    resolved_mode = resolve_dispatch_settings_mode(body.mode)
+    if resolved_mode == "ui":
+        ensure_ui_dispatch_bundle(create=True)
+        _sync_repo_skills_to_registry()
+
+    filename = body.filename.strip()
+    if not filename.lower().endswith(".zip"):
+        raise HTTPException(400, "Only .zip skill bundles are supported")
+
+    try:
+        payload = base64.b64decode(body.content_base64, validate=True)
+    except Exception as exc:
+        raise HTTPException(400, f"Invalid zip payload: {exc}") from exc
+
+    if not payload:
+        raise HTTPException(400, "Zip payload is empty")
+    if len(payload) > 25 * 1024 * 1024:
+        raise HTTPException(413, "Zip payload is too large")
+
+    registry_root = resolve_registry_skills_root_path()
+    _ensure_registry_layout()
+
+    with tempfile.TemporaryDirectory(prefix="cairn-skill-import-") as temp_dir:
+        temp_zip = Path(temp_dir) / filename
+        temp_zip.write_bytes(payload)
+        extract_root = Path(temp_dir) / "unzipped"
+        extract_root.mkdir(parents=True, exist_ok=True)
+
+        try:
+            with zipfile.ZipFile(temp_zip) as archive:
+                members = archive.infolist()
+                if not members:
+                    raise HTTPException(400, "Zip archive is empty")
+                _validate_skill_zip_members(members)
+                archive.extractall(extract_root)
+        except HTTPException:
+            raise
+        except zipfile.BadZipFile as exc:
+            raise HTTPException(400, f"Invalid zip archive: {exc}") from exc
+
+        skill_dir = _find_imported_skill_dir(extract_root)
+        if skill_dir is None:
+            raise HTTPException(400, "Zip does not contain a valid SKILL.md skill directory")
+
+        skill_file = skill_dir / "SKILL.md"
+        try:
+            text = skill_file.read_text(encoding="utf-8", errors="ignore")
+        except OSError as exc:
+            raise HTTPException(400, f"Unable to read imported SKILL.md: {exc}") from exc
+
+        skill_name = _extract_skill_name(skill_dir, text)
+        skill_id = _slugify_skill_id(skill_dir.name or skill_name)
+        target_dir = registry_root / skill_id
+        _sync_skill_dir(skill_dir, target_dir)
+
+    discovered = discover_skills(body.mode)
+    return SkillZipImportResponse(
+        imported_dir=str(target_dir),
+        discovered=discovered,
+    )
+
+
 def run_worker_healthcheck(body: WorkerHealthcheckRequest) -> WorkerHealthcheckResponse:
     settings = read_dispatch_settings(body.mode)
     runtime = body.runtime or settings.runtime
@@ -442,6 +509,45 @@ def _write_ui_bundle(body: UpdateDispatchSettingsRequest) -> None:
     root.mkdir(parents=True, exist_ok=True)
     _ensure_registry_layout()
     compiled_path = resolve_ui_dispatch_config_path()
+    existing_workers_raw = _read_json(root / _WORKERS_FILENAME, default=[])
+    existing_providers_raw = _read_json(root / _PROVIDERS_FILENAME, default=[])
+    existing_worker_tokens = {
+        str(item.get("name", "")).strip(): str(item.get("auth_token", ""))
+        for item in existing_workers_raw
+        if str(item.get("name", "")).strip()
+    }
+    existing_provider_tokens = {
+        str(item.get("id", "")).strip(): str(item.get("auth_token", ""))
+        for item in existing_providers_raw
+        if str(item.get("id", "")).strip()
+    }
+
+    normalized_workers = [
+        DispatchWorkerSettings.model_validate(
+            {
+                **worker.model_dump(),
+                "auth_token": worker.auth_token or (
+                    existing_worker_tokens.get(worker.name, "")
+                    if worker.has_auth_token
+                    else ""
+                ),
+            }
+        )
+        for worker in body.workers
+    ]
+    normalized_providers = [
+        ProviderSettings.model_validate(
+            {
+                **provider.model_dump(),
+                "auth_token": provider.auth_token or (
+                    existing_provider_tokens.get(provider.id, "")
+                    if provider.has_auth_token
+                    else ""
+                ),
+            }
+        )
+        for provider in body.providers
+    ]
 
     settings_payload = {
         "mode": "ui",
@@ -449,8 +555,14 @@ def _write_ui_bundle(body: UpdateDispatchSettingsRequest) -> None:
         "compiled_path": str(compiled_path),
         "source_path": str(root),
     }
-    workers_payload = [_worker_to_bundle(worker) for worker in body.workers]
-    providers_payload = [_provider_to_bundle(provider) for provider in body.providers]
+    workers_payload = [
+        _worker_to_bundle(worker, existing_auth_token=existing_worker_tokens.get(worker.name, ""))
+        for worker in normalized_workers
+    ]
+    providers_payload = [
+        _provider_to_bundle(provider, existing_auth_token=existing_provider_tokens.get(provider.id, ""))
+        for provider in normalized_providers
+    ]
     mcp_payload = [server.model_dump() for server in body.mcp_servers]
     skills_payload = [skill.model_dump() for skill in body.skills]
     bindings_payload = [binding.model_dump() for binding in body.worker_bindings]
@@ -465,8 +577,8 @@ def _write_ui_bundle(body: UpdateDispatchSettingsRequest) -> None:
     raw = _compile_ui_bundle(
         body.runtime,
         body.tasks,
-        body.workers,
-        body.providers,
+        normalized_workers,
+        normalized_providers,
         body.mcp_servers,
         body.skills,
         body.worker_bindings,
@@ -596,14 +708,18 @@ def _worker_to_settings(
     return settings
 
 
-def _worker_to_bundle(worker: DispatchWorkerSettings) -> dict[str, Any]:
+def _worker_to_bundle(worker: DispatchWorkerSettings, *, existing_auth_token: str = "") -> dict[str, Any]:
     payload = worker.model_dump()
+    if not payload.get("auth_token") and payload.get("has_auth_token") and existing_auth_token:
+        payload["auth_token"] = existing_auth_token
     payload["extra_env"] = _filter_editable_extra_env(worker.extra_env)
     return payload
 
 
-def _provider_to_bundle(provider: ProviderSettings) -> dict[str, Any]:
+def _provider_to_bundle(provider: ProviderSettings, *, existing_auth_token: str = "") -> dict[str, Any]:
     payload = provider.model_dump()
+    if not payload.get("auth_token") and payload.get("has_auth_token") and existing_auth_token:
+        payload["auth_token"] = existing_auth_token
     payload["extra_env"] = _filter_editable_extra_env(provider.extra_env)
     return payload
 
@@ -915,6 +1031,31 @@ def _sync_skill_dir(source_dir: Path, target_dir: Path) -> bool:
         shutil.rmtree(target_dir)
     shutil.copytree(source_dir, target_dir)
     return True
+
+
+def _validate_skill_zip_members(members: list[zipfile.ZipInfo]) -> None:
+    total_size = 0
+    for member in members:
+        name = member.filename
+        if not name or name.endswith("/"):
+            continue
+        normalized = Path(name)
+        if normalized.is_absolute() or ".." in normalized.parts:
+            raise HTTPException(400, f"Unsafe zip path: {name}")
+        total_size += max(member.file_size, 0)
+        if total_size > 50 * 1024 * 1024:
+            raise HTTPException(413, "Unzipped skill bundle is too large")
+
+
+def _find_imported_skill_dir(root: Path) -> Path | None:
+    direct_skill = root / "SKILL.md"
+    if direct_skill.exists():
+        return root
+    matches = _iter_skill_dirs(root)
+    if not matches:
+        return None
+    matches.sort(key=lambda item: (len(item.parts), str(item).lower()))
+    return matches[0]
 
 
 def _providers_from_file_workers(workers_raw: list[dict[str, Any]]) -> list[ProviderSettings]:

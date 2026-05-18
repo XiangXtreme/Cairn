@@ -199,6 +199,22 @@ class DiscoveredSkill(BaseModel):
         return value.strip()
 
 
+class SkillZipImportRequest(BaseModel):
+    mode: DispatchSettingsMode = "file"
+    filename: str
+    content_base64: str
+
+    @field_validator("filename", "content_base64")
+    @classmethod
+    def normalize_zip_import_text(cls, value: str) -> str:
+        return value.strip()
+
+
+class SkillZipImportResponse(BaseModel):
+    imported_dir: str
+    discovered: list[DiscoveredSkill] = Field(default_factory=list)
+
+
 class WorkerBindingSettings(BaseModel):
     worker_name: str
     mcp_server_ids: list[str] = Field(default_factory=list)

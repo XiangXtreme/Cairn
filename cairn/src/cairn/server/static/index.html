@@ -1043,282 +1043,346 @@
         </div>
       </section>
 
-      <section x-show="settingsSection === 'mcp'" class="rounded-3xl border border-slate-200/70 bg-white p-5 shadow-sm">
-        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          <div>
-            <div class="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">MCP</div>
-            <h3 class="mt-1 text-lg font-semibold tracking-tight text-slate-800">统一 MCP 注册中心</h3>
-            <p class="mt-1 text-sm text-slate-500">更接近 cc-switch 的统一注册方式：先登记 MCP 资源，再按 Worker 启用与同步。</p>
-          </div>
-          <div class="flex flex-wrap items-center gap-2">
-            <button @click="addMcpServer()" class="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 transition shadow-sm">新增 MCP</button>
-            <button @click="syncDispatchResources()" class="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition">重新加载资源</button>
-          </div>
-        </div>
-        <div class="mt-4 grid grid-cols-1 xl:grid-cols-[0.95fr_1.05fr] gap-4">
-          <div class="rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
-            <div class="flex items-center justify-between gap-3">
-              <div>
-                <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">启用概况</div>
-                <div class="mt-1 text-sm text-slate-500">按运行器统计当前启用的 MCP 绑定数。</div>
-              </div>
-              <span class="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700"
-                x-text="`${enabledMcpCount()} / ${dispatchForm.mcp_servers.length}`"></span>
-            </div>
-            <div class="mt-4 grid grid-cols-2 gap-3">
-              <template x-for="entry in mcpAppSummaryCards()" :key="entry.key">
-                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                  <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400" x-text="entry.label"></div>
-                  <div class="mt-1 text-lg font-semibold text-slate-800" x-text="entry.count"></div>
-                  <div class="mt-1 text-xs text-slate-500" x-text="entry.detail"></div>
-                </div>
-              </template>
-            </div>
-            <div class="mt-4 rounded-2xl border border-dashed border-slate-200 bg-white/80 px-4 py-3 text-xs leading-5 text-slate-500">
-              Claude Code / Codex 当前支持注入；Pi 保持预留，不自动同步。
-            </div>
-          </div>
-          <div class="rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
-            <div class="flex items-center justify-between gap-3">
-              <div>
-                <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">运行器绑定矩阵</div>
-                <div class="mt-1 text-sm text-slate-500">每个 Worker 启用了哪些 MCP，一眼看清。</div>
-              </div>
-            </div>
-            <div class="mt-4 space-y-3">
-              <template x-for="worker in dispatchForm.workers" :key="`mcp-matrix-${worker.name}`">
-                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                  <div class="flex flex-wrap items-center gap-2">
-                    <span class="rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]"
-                      :class="dispatchWorkerTypeClass(worker.type)"
-                      x-text="workerTypeLabel(worker.type)"></span>
-                    <span class="text-sm font-medium text-slate-800" x-text="worker.name"></span>
-                  </div>
-                  <div class="mt-3 flex flex-wrap gap-2">
-                    <template x-if="worker.mcp_supported && (worker.mcp_server_ids || []).length">
-                      <template x-for="serverId in worker.mcp_server_ids" :key="`${worker.name}-${serverId}`">
-                        <span class="rounded-full border px-3 py-1.5 text-xs font-medium"
-                          :class="resourceBadgeClass(findMcpServer(serverId)?.enabled !== false)">
-                          <span x-text="findMcpServer(serverId)?.name || serverId"></span>
-                        </span>
-                      </template>
-                    </template>
-                    <template x-if="!worker.mcp_supported || !(worker.mcp_server_ids || []).length">
-                      <span class="text-xs text-slate-400" x-text="worker.mcp_supported ? '未绑定 MCP' : '该运行器未接入 MCP'"></span>
-                    </template>
-                  </div>
-                </div>
-              </template>
-            </div>
-          </div>
-        </div>
-        <div class="mt-5 space-y-4">
-          <template x-for="(server, idx) in dispatchForm.mcp_servers" :key="server.id || idx">
-            <article class="rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
-              <div class="flex flex-col xl:flex-row xl:items-start justify-between gap-4">
-                <div class="min-w-0 flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <label class="block">
-                    <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">标识</span>
-                    <input x-model="server.id" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
-                  </label>
-                  <label class="block">
-                    <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">名称</span>
-                    <input x-model="server.name" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
-                  </label>
-                  <label class="block">
-                    <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">传输方式</span>
-                    <select x-model="server.transport" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
-                      <option value="stdio">stdio</option>
-                      <option value="http">http</option>
-                    </select>
-                  </label>
-                  <label class="block">
-                    <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400" x-text="server.transport === 'stdio' ? '命令' : 'URL'"></span>
-                    <input :value="server.transport === 'stdio' ? server.command : server.url" @input="server.transport === 'stdio' ? (server.command = $event.target.value) : (server.url = $event.target.value)" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
-                  </label>
-                  <label class="block md:col-span-2" x-show="server.transport === 'stdio'">
-                    <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">参数</span>
-                    <input :value="(server.args || []).join(' ')" @input="server.args = splitArgsInput($event.target.value)" placeholder="例如：-y @upstash/context7-mcp" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
-                  </label>
-                </div>
-                <div class="shrink-0 space-y-3 xl:w-72">
-                  <div class="rounded-2xl border border-slate-200 bg-white px-3 py-3">
-                    <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">注册状态</div>
-                    <div class="mt-2 flex flex-wrap gap-2">
-                      <span class="rounded-full px-2.5 py-1 text-[10px] font-semibold"
-                        :class="server.enabled === false ? 'border border-slate-200 bg-slate-100 text-slate-500' : 'border border-emerald-200 bg-emerald-50 text-emerald-700'"
-                        x-text="server.enabled === false ? '未启用' : '已启用'"></span>
-                      <span class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-semibold text-slate-600"
-                        x-text="`${mcpWorkerCount(server.id)} 个 Worker`"></span>
-                    </div>
-                    <div class="mt-3 flex flex-wrap gap-2">
-                      <template x-for="worker in workersUsingMcp(server.id)" :key="`${server.id}-${worker.name}`">
-                        <span class="rounded-full border px-2.5 py-1 text-[10px] font-semibold"
-                          :class="dispatchWorkerTypeClass(worker.type)">
-                          <span x-text="worker.name"></span>
-                        </span>
-                      </template>
-                      <template x-if="workersUsingMcp(server.id).length === 0">
-                        <span class="text-xs text-slate-400">还没有 Worker 使用它</span>
-                      </template>
-                    </div>
-                  </div>
-                  <div class="flex items-center gap-2">
-                    <button @click="server.enabled = server.enabled === false" class="rounded-xl border px-3 py-2 text-sm font-medium transition" :class="server.enabled === false ? 'border-teal-200 text-teal-700 hover:bg-teal-50' : 'border-slate-200 text-slate-600 hover:bg-slate-50'">
-                      <span x-text="server.enabled === false ? '启用' : '禁用'"></span>
-                    </button>
-                    <button @click="removeMcpServer(idx)" class="rounded-xl border border-rose-200 px-3 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 transition">移除</button>
-                  </div>
-                </div>
-              </div>
-            </article>
-          </template>
-        </div>
-      </section>
-
-      <section x-show="settingsSection === 'skills'" class="rounded-3xl border border-slate-200/70 bg-white p-0 shadow-sm overflow-hidden">
-        <div class="px-8 pt-7 pb-6 border-b border-slate-200/80">
+      <section x-show="settingsSection === 'mcp'" class="rounded-3xl border border-slate-200/70 bg-white p-0 shadow-sm overflow-hidden">
+        <div class="border-b border-slate-200/80 px-6 py-5 lg:px-8">
           <div class="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
             <div class="min-w-0">
-              <div class="flex items-center gap-4">
-                <button type="button" class="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-500">
-                  <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><path d="m15 19-7-7 7-7"/></svg>
-                </button>
-                <div>
-                  <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Skills</div>
-                  <h3 class="mt-1 text-4xl font-semibold tracking-tight text-slate-900">容器 Skills 管理</h3>
-                </div>
+              <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">MCP</div>
+              <h3 class="mt-1 text-2xl font-semibold tracking-tight text-slate-900">统一 MCP 注册与绑定</h3>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-500">参考 cc-switch 的统一资源面板做法，在 Cairn 里保留“中央注册表 + Worker 绑定”的结构。这里管理的是主容器内的 MCP 定义，保存后会同步到后续启动的 Claude / Codex Worker。</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <button @click="syncDispatchResources()" class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition">重新加载</button>
+              <button @click="addMcpServer()" class="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 transition">新增 MCP</button>
+            </div>
+          </div>
+
+          <div class="mt-5 grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+            <div class="rounded-3xl border border-slate-200 bg-slate-50/80 px-4 py-4">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="inline-flex items-center rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-800"
+                  x-text="`共 ${dispatchForm.mcp_servers.length} 个 MCP`"></span>
+                <template x-for="item in mcpAppCountChips()" :key="item.key">
+                  <span class="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold" :class="item.className">
+                    <img x-show="item.iconSrc" :src="item.iconSrc" :alt="item.label" class="h-4 w-4 rounded-sm object-contain opacity-80">
+                    <span x-text="item.label"></span>
+                    <span x-text="item.count"></span>
+                  </span>
+                </template>
               </div>
-              <div class="mt-6 rounded-[24px] border border-slate-200 bg-slate-50/80 px-5 py-5">
-                <div class="flex flex-wrap items-center gap-3">
-                  <span class="inline-flex items-center rounded-full border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800">已安装</span>
-                  <template x-for="item in skillAppCountChips()" :key="item.key">
-                    <span class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold"
-                      :class="item.className">
-                      <img x-show="item.iconSrc" :src="item.iconSrc" :alt="item.label" class="h-4 w-4 rounded-sm object-contain opacity-80">
-                      <span x-text="`${item.label}:`"></span>
-                      <span x-text="item.count"></span>
-                    </span>
-                  </template>
-                </div>
+              <div class="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <template x-for="entry in mcpAppSummaryCards()" :key="entry.key">
+                  <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                    <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400" x-text="entry.label"></div>
+                    <div class="mt-1 text-lg font-semibold text-slate-800" x-text="entry.count"></div>
+                    <div class="mt-1 text-xs leading-5 text-slate-500" x-text="entry.detail"></div>
+                  </div>
+                </template>
               </div>
             </div>
-            <div class="flex flex-wrap items-center gap-6 text-sm text-slate-500">
-              <button @click="showToast('备份恢复面板将在下一步接入', 'info')" class="inline-flex items-center gap-2 hover:text-slate-800 transition">
-                <span class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 shadow-sm">
-                  <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 8v5l3 3"/><path d="M3.05 11a9 9 0 1 1 .5 4"/><path d="M3 4v5h5"/></svg>
-                </span>
-                从备份中恢复
-              </button>
-              <button @click="showToast('ZIP 安装入口将在下一步接入', 'info')" class="inline-flex items-center gap-2 hover:text-slate-800 transition">
-                <span class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 shadow-sm">
-                  <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
-                </span>
-                从 ZIP 安装
-              </button>
-              <button @click="importExistingSkills()" class="inline-flex items-center gap-2 hover:text-slate-800 transition">
-                <span class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 shadow-sm">
-                  <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
-                </span>
-                导入容器技能
-              </button>
-              <button @click="discoverSkills()" class="inline-flex items-center gap-2 hover:text-slate-800 transition">
-                <span class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 shadow-sm">
-                  <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-                </span>
-                扫描容器技能
-              </button>
+
+            <div class="rounded-3xl border border-slate-200 bg-slate-50/80 px-4 py-4">
+              <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">绑定概览</div>
+              <div class="mt-1 text-sm text-slate-500">用哪类 Worker 在消费 MCP，一眼能看出来。</div>
+              <div class="mt-4 space-y-3">
+                <template x-for="worker in dispatchForm.workers" :key="`mcp-overview-${worker.name}`">
+                  <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span class="rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]" :class="dispatchWorkerTypeClass(worker.type)" x-text="workerTypeLabel(worker.type)"></span>
+                      <span class="text-sm font-medium text-slate-800" x-text="worker.name"></span>
+                    </div>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                      <template x-if="worker.mcp_supported && (worker.mcp_server_ids || []).length">
+                        <template x-for="serverId in worker.mcp_server_ids" :key="`${worker.name}-${serverId}`">
+                          <span class="rounded-full border px-3 py-1 text-xs font-medium" :class="resourceBadgeClass(findMcpServer(serverId)?.enabled !== false)">
+                            <span x-text="findMcpServer(serverId)?.name || serverId"></span>
+                          </span>
+                        </template>
+                      </template>
+                      <template x-if="!worker.mcp_supported || !(worker.mcp_server_ids || []).length">
+                        <span class="text-xs text-slate-400" x-text="worker.mcp_supported ? '未绑定 MCP' : '该运行器未接入 MCP'"></span>
+                      </template>
+                    </div>
+                  </div>
+                </template>
+              </div>
             </div>
           </div>
         </div>
 
-        <div class="px-8 py-5">
-          <div class="flex items-center justify-between gap-3 text-slate-500">
-            <div class="text-sm">共 <span class="font-semibold text-slate-800" x-text="dispatchForm.skills.length"></span> 个技能条目</div>
-            <button @click="showToast('更新检查入口将在下一步接入', 'info')" class="inline-flex items-center gap-2 text-sm hover:text-slate-800 transition">
-              <span class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 shadow-sm">
-                <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.708"/><path d="M3 3v6h6"/></svg>
-              </span>
-              检查更新
-            </button>
-          </div>
+        <div class="px-6 py-5 lg:px-8">
+          <div class="overflow-hidden rounded-[28px] border border-slate-200 bg-slate-50/60">
+            <div class="flex items-center justify-between border-b border-slate-200 bg-white/70 px-5 py-3">
+              <div>
+                <div class="text-sm font-medium text-slate-800">MCP 资源列表</div>
+                <div class="mt-1 text-xs text-slate-500">每条资源都支持独立启停、展开详情，以及按 Worker 类型快速绑定。</div>
+              </div>
+              <div class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-500">cc-switch 风格列表</div>
+            </div>
 
-          <div class="mt-6 overflow-hidden rounded-[28px] border border-slate-200 bg-slate-50/60">
-            <template x-if="discoveredSkills.length > 0">
-              <div class="px-6 py-4 border-b border-slate-200 bg-sky-50/70">
-                <div class="flex flex-wrap items-center gap-2">
-                  <span class="text-sm font-medium text-sky-800">最近发现到的 Skill</span>
-                  <template x-for="skill in discoveredSkills.slice(0, 6)" :key="`discovered-${skill.path}`">
-                    <span class="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-white px-3 py-1 text-xs font-medium text-sky-700 shadow-sm">
-                      <span class="inline-flex h-4 w-4 items-center justify-center rounded-full bg-sky-100 text-sky-600">
-                        <svg class="h-2.5 w-2.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m12 5 2.2 4.46 4.92.72-3.56 3.47.84 4.9L12 16.7l-4.4 2.32.84-4.9-3.56-3.47 4.92-.72L12 5Z"/></svg>
-                      </span>
-                      <span x-text="skill.name"></span>
-                      <span class="text-sky-400" x-show="skill.already_registered">已注册</span>
-                    </span>
-                  </template>
-                  <span class="text-xs text-sky-500" x-show="discoveredSkills.length > 6" x-text="`+${discoveredSkills.length - 6} 更多`"></span>
-                </div>
-              </div>
-            </template>
-            <template x-if="dispatchForm.skills.length === 0">
+            <template x-if="dispatchForm.mcp_servers.length === 0">
               <div class="px-6 py-16 text-center">
-                <div class="text-lg font-medium text-slate-800">还没有 Skill</div>
-                <div class="mt-2 text-sm text-slate-400">先新增、扫描，或者登记要挂载给容器 agent 的技能目录。</div>
+                <div class="text-lg font-medium text-slate-800">还没有 MCP 服务器</div>
+                <div class="mt-2 text-sm text-slate-400">先注册一个 MCP，再决定让哪些 Worker 使用它。</div>
               </div>
             </template>
-            <template x-for="(skill, idx) in dispatchForm.skills" :key="skill.id || idx">
-              <article class="px-6 py-5 border-b border-slate-200 last:border-b-0 bg-white/80">
-                <div class="flex items-start gap-4">
-                  <div class="min-w-0 flex-1">
-                    <div class="flex flex-wrap items-center gap-3">
-                      <input x-model="skill.name" class="min-w-0 bg-transparent text-[18px] font-semibold leading-6 text-slate-900 focus:outline-none" placeholder="Skill 名称">
-                      <span class="text-sm text-slate-400" x-text="skillPathExists(skill.path) ? '本地' : '未定位'"></span>
+
+            <template x-for="(server, idx) in dispatchForm.mcp_servers" :key="server.id || idx">
+              <article class="border-b border-slate-200 last:border-b-0 bg-white/80">
+                <div class="flex flex-col gap-4 px-5 py-4">
+                  <div class="flex flex-col gap-4 xl:flex-row xl:items-center">
+                    <div class="min-w-0 flex-1">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <div class="truncate text-base font-semibold text-slate-900" x-text="server.name || server.id || '未命名 MCP'"></div>
+                        <span class="rounded-full px-2.5 py-1 text-[10px] font-semibold"
+                          :class="server.enabled === false ? 'border border-slate-200 bg-slate-100 text-slate-500' : 'border border-emerald-200 bg-emerald-50 text-emerald-700'"
+                          x-text="server.enabled === false ? '已关闭' : '已启用'"></span>
+                        <span class="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-medium text-slate-500" x-text="server.transport === 'stdio' ? 'STDIO' : 'HTTP'"></span>
+                      </div>
+                      <div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-400">
+                        <span class="font-mono" x-text="server.id || 'mcp_id'"></span>
+                        <span class="text-slate-300">·</span>
+                        <span class="truncate" x-text="server.transport === 'stdio' ? (server.command || '未设置命令') : (server.url || '未设置 URL')"></span>
+                      </div>
                     </div>
-                    <div class="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-400">
-                      <input x-model="skill.id" class="min-w-0 bg-transparent text-slate-500 focus:outline-none" placeholder="skill_id">
-                      <span class="text-slate-300">·</span>
-                      <input x-model="skill.path" class="min-w-0 flex-1 bg-transparent text-slate-400 focus:outline-none" placeholder="/path/to/skill">
-                    </div>
-                    <textarea x-model="skill.description" rows="2" class="mt-3 w-full resize-none bg-transparent text-base leading-7 text-slate-600 focus:outline-none" placeholder="描述这个 skill 的用途、适用场景和能力边界"></textarea>
-                  </div>
-                  <div class="flex shrink-0 items-center gap-3 pl-4">
-                    <template x-for="item in skillAppCountChips()" :key="`${skill.id}-${item.key}`">
-                      <button type="button"
-                        @click="toggleSkillApp(skill, item.key)"
-                        class="inline-flex h-12 min-w-12 items-center justify-center gap-1.5 rounded-full border bg-white px-3 text-sm font-semibold shadow-sm transition"
-                        :class="skillAppEnabled(skill, item.key)
-                          ? (item.key === 'claude'
-                              ? 'border-orange-200 bg-orange-50 text-orange-600'
-                              : item.key === 'codex'
-                                ? 'border-emerald-200 bg-emerald-50 text-emerald-600'
-                                : 'border-brand-200 bg-brand-50 text-brand-700')
-                          : 'border-slate-200 text-slate-300 hover:bg-slate-50'">
-                        <img x-show="item.iconSrc" :src="item.iconSrc" :alt="item.label" class="h-4 w-4 rounded-sm object-contain opacity-75">
-                        <span x-text="skillAppEnabled(skill, item.key) ? '开' : '关'"></span>
+
+                    <div class="flex flex-wrap items-center gap-2">
+                      <template x-for="item in mcpAppToggleDescriptors()" :key="`${server.id}-${item.key}`">
+                        <button type="button"
+                          @click="toggleMcpApp(server, item.workerType)"
+                          class="inline-flex h-10 min-w-10 items-center justify-center gap-1.5 rounded-full border bg-white px-3 text-xs font-semibold shadow-sm transition"
+                          :class="mcpAppEnabled(server, item.workerType) ? item.activeClass : 'border-slate-200 text-slate-300 hover:bg-slate-50'">
+                          <img x-show="item.iconSrc" :src="item.iconSrc" :alt="item.label" class="h-4 w-4 rounded-sm object-contain opacity-80">
+                          <span x-show="mcpAppEnabled(server, item.workerType)" x-text="item.label"></span>
                       </button>
                     </template>
-                    <button @click="skill.enabled = skill.enabled === false" class="inline-flex h-12 w-12 items-center justify-center rounded-2xl border shadow-sm transition"
-                      :class="skill.enabled === false ? 'border-slate-200 bg-white text-slate-400 hover:bg-slate-100' : 'border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100'">
-                      <svg x-show="skill.enabled !== false" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>
-                      <svg x-show="skill.enabled === false" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><path d="M6 12h12"/></svg>
-                    </button>
-                    <button @click="removeSkill(idx)" class="inline-flex h-12 w-12 items-center justify-center rounded-2xl text-slate-400 hover:bg-rose-50 hover:text-rose-500 transition">
-                      <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4.75A1.75 1.75 0 0 1 9.75 3h4.5A1.75 1.75 0 0 1 16 4.75V6"/><path d="M19 6l-.63 11.338A2 2 0 0 1 16.37 19.5H7.63a2 2 0 0 1-1.997-2.162L5 6"/></svg>
-                    </button>
+                  </div>
+
+                  <div class="flex items-center gap-2 xl:ml-3">
+                      <button @click="server.enabled = server.enabled === false" class="rounded-2xl border px-3 py-2 text-sm font-medium transition"
+                        :class="server.enabled === false ? 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50' : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'">
+                        <span x-text="server.enabled === false ? '启用' : '禁用'"></span>
+                      </button>
+                      <button @click="server.show_details = !server.show_details" class="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition">
+                        <span x-text="server.show_details ? '收起详情' : '编辑详情'"></span>
+                      </button>
+                      <button @click="removeMcpServer(idx)" class="rounded-2xl border border-rose-200 bg-white px-3 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 transition">删除</button>
+                    </div>
+                  </div>
+
+                  <div class="flex flex-wrap gap-2">
+                    <template x-for="worker in workersUsingMcp(server.id)" :key="`${server.id}-${worker.name}`">
+                      <span class="rounded-full border px-2.5 py-1 text-[10px] font-semibold" :class="dispatchWorkerTypeClass(worker.type)">
+                        <span x-text="worker.name"></span>
+                      </span>
+                    </template>
+                    <template x-if="workersUsingMcp(server.id).length === 0">
+                      <span class="text-xs text-slate-400">还没有 Worker 使用它</span>
+                    </template>
+                  </div>
+
+                  <div x-show="server.show_details" class="grid grid-cols-1 gap-3 border-t border-slate-200 pt-4 md:grid-cols-2">
+                    <label class="block">
+                      <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">标识</span>
+                      <input x-model="server.id" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                    </label>
+                    <label class="block">
+                      <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">名称</span>
+                      <input x-model="server.name" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                    </label>
+                    <label class="block">
+                      <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">传输方式</span>
+                      <select x-model="server.transport" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                        <option value="stdio">stdio</option>
+                        <option value="http">http</option>
+                      </select>
+                    </label>
+                    <label class="block">
+                      <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400" x-text="server.transport === 'stdio' ? '命令' : 'URL'"></span>
+                      <input :value="server.transport === 'stdio' ? server.command : server.url" @input="server.transport === 'stdio' ? (server.command = $event.target.value) : (server.url = $event.target.value)" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                    </label>
+                    <label class="block md:col-span-2" x-show="server.transport === 'stdio'">
+                      <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">参数</span>
+                      <input :value="(server.args || []).join(' ')" @input="server.args = splitArgsInput($event.target.value)" placeholder="例如：-y @upstash/context7-mcp" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                    </label>
                   </div>
                 </div>
               </article>
             </template>
           </div>
 
-          <div class="mt-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 rounded-[24px] border border-slate-200 bg-slate-50/80 px-5 py-4">
+          <div class="mt-5 flex flex-col gap-4 rounded-[24px] border border-slate-200 bg-slate-50/80 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <div class="text-sm font-medium text-slate-800" x-text="dispatchSettingsMode === 'ui' ? '保存后会写入 UI 真源并重新编译 dispatch_ui.yaml。' : '保存后会更新当前 YAML 配置。'"></div>
-              <p class="mt-1 text-xs text-slate-400" x-text="dispatchSettingsMeta.writable ? '已启动的 Agent 继续使用当前配置，新任务会自动读取最新技能注册表。' : '当前配置源只读，暂时无法保存。'"></p>
+              <div class="text-sm font-medium text-slate-800">保存后会更新主容器注册表，并把启用的 MCP 注入到后续启动的 Worker。</div>
+              <p class="mt-1 text-xs text-slate-400">已经运行中的 Agent 不会被强制打断，新任务会读取最新绑定。</p>
             </div>
             <button @click="saveDispatchSettings()" :disabled="isSavingDispatchSettings || !!dispatchLoadError || !dispatchSettingsMeta.writable" class="shrink-0 rounded-2xl bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-800 transition disabled:opacity-40 disabled:cursor-not-allowed">
-              <span x-text="isSavingDispatchSettings ? '保存中...' : '保存 Skills 配置'"></span>
+              <span x-text="isSavingDispatchSettings ? '保存中...' : '保存 MCP 配置'"></span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section x-show="settingsSection === 'skills'" class="rounded-3xl border border-slate-200/70 bg-white p-0 shadow-sm overflow-hidden">
+        <div class="border-b border-slate-200/80 px-6 py-5 lg:px-8">
+          <div class="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+            <div class="min-w-0">
+              <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Skills</div>
+              <h3 class="mt-1 text-2xl font-semibold tracking-tight text-slate-900">容器 Skill 注册与分发</h3>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-500">这里尽量贴近 cc-switch 的 Skill 管理心智：以扫描容器内已有 Skill、导入到注册表、再控制 Claude / Codex 的启用状态为主，不强调手工从零创建。</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <button @click="discoverSkills()" class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition">扫描容器 Skill</button>
+              <button @click="importExistingSkills()" class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition">导入已发现项</button>
+              <input x-ref="skillZipInput" type="file" accept=".zip,application/zip" class="hidden" @change="importSkillZip($event)">
+              <button @click="$refs.skillZipInput?.click()" class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition">导入 .zip</button>
+            </div>
+          </div>
+
+          <div class="mt-5 grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+            <div class="rounded-3xl border border-slate-200 bg-slate-50/80 px-4 py-4">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="inline-flex items-center rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-800" x-text="`共 ${dispatchForm.skills.length} 个 Skill`"></span>
+                <template x-for="item in skillAppCountChips()" :key="item.key">
+                  <span class="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold" :class="item.className">
+                    <img x-show="item.iconSrc" :src="item.iconSrc" :alt="item.label" class="h-4 w-4 rounded-sm object-contain opacity-80">
+                    <span x-text="item.label"></span>
+                    <span x-text="item.count"></span>
+                  </span>
+                </template>
+              </div>
+              <div class="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">已启用</div>
+                  <div class="mt-1 text-lg font-semibold text-slate-800" x-text="enabledSkillCount()"></div>
+                  <div class="mt-1 text-xs text-slate-500">当前注册表启用中的 Skill</div>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">已绑定</div>
+                  <div class="mt-1 text-lg font-semibold text-slate-800" x-text="boundSkillCount()"></div>
+                  <div class="mt-1 text-xs text-slate-500">至少被一个 Worker 使用</div>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">存在路径</div>
+                  <div class="mt-1 text-lg font-semibold text-slate-800" x-text="existingSkillPathCount()"></div>
+                  <div class="mt-1 text-xs text-slate-500">已登记路径的 Skill 条目</div>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">最近发现</div>
+                  <div class="mt-1 text-lg font-semibold text-slate-800" x-text="discoveredSkills.length"></div>
+                  <div class="mt-1 text-xs text-slate-500">本轮扫描得到的容器 Skill</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="rounded-3xl border border-slate-200 bg-slate-50/80 px-4 py-4">
+              <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">发现结果</div>
+              <div class="mt-1 text-sm text-slate-500">扫描到的容器 Skill 会先出现在这里，再决定是否并入当前注册表。</div>
+              <div class="mt-4 space-y-2">
+                <template x-if="discoveredSkills.length === 0">
+                  <div class="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-6 text-sm text-slate-400">当前还没有扫描结果。</div>
+                </template>
+                <template x-for="skill in discoveredSkills.slice(0, 5)" :key="`discovered-${skill.path}`">
+                  <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                    <div class="flex items-center justify-between gap-3">
+                      <div class="min-w-0">
+                        <div class="truncate text-sm font-medium text-slate-800" x-text="skill.name"></div>
+                        <div class="mt-1 truncate text-xs text-slate-400" x-text="skill.path"></div>
+                      </div>
+                      <span class="rounded-full px-2.5 py-1 text-[10px] font-semibold"
+                        :class="skill.already_registered ? 'border border-emerald-200 bg-emerald-50 text-emerald-700' : 'border border-sky-200 bg-sky-50 text-sky-700'"
+                        x-text="skill.already_registered ? '已注册' : '待导入'"></span>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="px-6 py-5 lg:px-8">
+          <div class="overflow-hidden rounded-[28px] border border-slate-200 bg-slate-50/60">
+            <div class="flex items-center justify-between border-b border-slate-200 bg-white/70 px-5 py-3">
+              <div>
+                <div class="text-sm font-medium text-slate-800">Skill 资源列表</div>
+                <div class="mt-1 text-xs text-slate-500">按条目维护容器路径、说明，以及对 Claude / Codex 的启用开关。</div>
+              </div>
+              <div class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-500">本地注册表</div>
+            </div>
+
+            <template x-if="dispatchForm.skills.length === 0">
+              <div class="px-6 py-16 text-center">
+                <div class="text-lg font-medium text-slate-800">还没有 Skill</div>
+                <div class="mt-2 text-sm text-slate-400">先扫描容器目录，再把发现到的 Skill 导入到当前注册表。</div>
+              </div>
+            </template>
+
+            <template x-for="(skill, idx) in dispatchForm.skills" :key="skill.id || idx">
+              <article class="border-b border-slate-200 last:border-b-0 bg-white/80">
+                <div class="flex flex-col gap-4 px-5 py-4">
+                  <div class="flex flex-col gap-4 xl:flex-row xl:items-start">
+                    <div class="min-w-0 flex-1">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <input x-model="skill.name" class="min-w-0 bg-transparent text-base font-semibold text-slate-900 focus:outline-none" placeholder="Skill 名称">
+                        <span class="rounded-full px-2.5 py-1 text-[10px] font-semibold"
+                          :class="skill.enabled === false ? 'border border-slate-200 bg-slate-100 text-slate-500' : 'border border-emerald-200 bg-emerald-50 text-emerald-700'"
+                          x-text="skill.enabled === false ? '已关闭' : '已启用'"></span>
+                        <span class="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-medium text-slate-500" x-text="skillPathExists(skill.path) ? '本地路径' : '待补路径'"></span>
+                      </div>
+                      <div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-400">
+                        <input x-model="skill.id" class="min-w-0 bg-transparent font-mono text-slate-500 focus:outline-none" placeholder="skill_id">
+                        <span class="text-slate-300">·</span>
+                        <input x-model="skill.path" class="min-w-0 flex-1 bg-transparent text-slate-400 focus:outline-none" placeholder="/path/to/skill">
+                      </div>
+                      <textarea x-model="skill.description" rows="2" class="mt-3 w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-600 focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400" placeholder="描述这个 skill 的用途、适用场景和能力边界"></textarea>
+                    </div>
+
+                    <div class="flex shrink-0 flex-wrap items-center gap-2 xl:pl-3">
+                      <template x-for="item in availableSkillAppDescriptors()" :key="`${skill.id}-${item.key}`">
+                        <button type="button"
+                          @click="toggleSkillApp(skill, item.key)"
+                          class="inline-flex h-10 min-w-10 items-center justify-center gap-1.5 rounded-full border bg-white px-3 text-xs font-semibold shadow-sm transition"
+                          :class="skillAppEnabled(skill, item.key)
+                            ? (item.key === 'claude'
+                                ? 'border-orange-200 bg-orange-50 text-orange-600'
+                                : item.key === 'codex'
+                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-600'
+                                  : 'border-brand-200 bg-brand-50 text-brand-700')
+                            : 'border-slate-200 text-slate-300 hover:bg-slate-50'">
+                          <img x-show="item.iconSrc" :src="item.iconSrc" :alt="item.label" class="h-4 w-4 rounded-sm object-contain opacity-80">
+                          <span x-show="skillAppEnabled(skill, item.key)" x-text="item.label"></span>
+                        </button>
+                      </template>
+                      <button @click="skill.enabled = skill.enabled === false" class="rounded-2xl border px-3 py-2 text-sm font-medium transition"
+                        :class="skill.enabled === false ? 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50' : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'">
+                        <span x-text="skill.enabled === false ? '启用' : '禁用'"></span>
+                      </button>
+                      <button @click="removeSkill(idx)" class="rounded-2xl border border-rose-200 bg-white px-3 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 transition">删除</button>
+                    </div>
+                  </div>
+
+                  <div class="flex flex-wrap gap-2">
+                    <template x-for="worker in workersUsingSkill(skill.id)" :key="`${skill.id}-${worker.name}`">
+                      <span class="rounded-full border px-2.5 py-1 text-[10px] font-semibold" :class="dispatchWorkerTypeClass(worker.type)">
+                        <span x-text="worker.name"></span>
+                      </span>
+                    </template>
+                    <template x-if="workersUsingSkill(skill.id).length === 0">
+                      <span class="text-xs text-slate-400">还没有 Worker 绑定这个 Skill</span>
+                    </template>
+                  </div>
+                </div>
+              </article>
+            </template>
+          </div>
+
+          <div class="mt-5 flex flex-col gap-4 rounded-[24px] border border-slate-200 bg-slate-50/80 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div class="text-sm font-medium text-slate-800" x-text="dispatchSettingsMode === 'ui' ? '保存后会写入 UI 真源并重新编译 dispatch_ui.yaml。' : '保存后会更新当前 YAML 配置。'"></div>
+              <p class="mt-1 text-xs text-slate-400">新开的项目会读取这里的 Skill 注册表与绑定关系，正在运行中的 Agent 不会热替换。</p>
+            </div>
+            <button @click="saveDispatchSettings()" :disabled="isSavingDispatchSettings || !!dispatchLoadError || !dispatchSettingsMeta.writable" class="shrink-0 rounded-2xl bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-800 transition disabled:opacity-40 disabled:cursor-not-allowed">
+              <span x-text="isSavingDispatchSettings ? '保存中...' : '保存 Skill 配置'"></span>
             </button>
           </div>
         </div>
@@ -2841,6 +2905,7 @@ function cairnApp() {
         url: '',
         args: [],
         env: {},
+        show_details: true,
       };
     },
 
@@ -2853,6 +2918,7 @@ function cairnApp() {
         description: '',
         enabled_claude: false,
         enabled_codex: false,
+        show_details: true,
       };
     },
 
@@ -3257,6 +3323,61 @@ function cairnApp() {
       }));
     },
 
+    mcpAppToggleDescriptors() {
+      return [
+        {
+          key: 'claude',
+          label: 'Claude',
+          workerType: 'claudecode',
+          iconSrc: '/static/vendor/ccswitch-icons/claude.svg',
+          className: 'bg-orange-50 text-orange-700 border border-orange-200',
+          activeClass: 'border-orange-200 bg-orange-50 text-orange-600',
+        },
+        {
+          key: 'codex',
+          label: 'Codex',
+          workerType: 'codex',
+          iconSrc: '/static/vendor/ccswitch-icons/chatgpt.svg',
+          className: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+          activeClass: 'border-emerald-200 bg-emerald-50 text-emerald-600',
+        },
+        {
+          key: 'pi',
+          label: 'Pi',
+          workerType: 'pi',
+          className: 'bg-amber-50 text-amber-700 border border-amber-200',
+          activeClass: 'border-amber-200 bg-amber-50 text-amber-600',
+        },
+      ];
+    },
+
+    mcpAppEnabled(server, workerType) {
+      if (!server?.id) return false;
+      return (this.dispatchForm?.workers || []).some((worker) => worker.type === workerType && (worker.mcp_server_ids || []).includes(server.id));
+    },
+
+    toggleMcpApp(server, workerType) {
+      if (!server?.id) return;
+      const workers = (this.dispatchForm?.workers || []).filter((worker) => worker.type === workerType);
+      const nextEnabled = !this.mcpAppEnabled(server, workerType);
+      for (const worker of workers) {
+        if (worker.mcp_supported === false) continue;
+        const current = new Set(worker.mcp_server_ids || []);
+        if (nextEnabled) current.add(server.id);
+        else current.delete(server.id);
+        worker.mcp_server_ids = this.dispatchForm.mcp_servers
+          .map((item) => item.id)
+          .filter((id) => current.has(id));
+      }
+    },
+
+    mcpAppCountChips() {
+      return this.mcpAppToggleDescriptors().map((item) => ({
+        ...item,
+        count: (this.dispatchForm?.mcp_servers || []).filter((server) => this.mcpAppEnabled(server, item.workerType)).length,
+      }));
+    },
+
     async syncDispatchResources() {
       await this.loadDispatchSettings();
       this.showToast('资源已重新加载');
@@ -3319,6 +3440,48 @@ function cairnApp() {
         this.showToast(`已导入 ${imported} 个容器 Skill，请记得保存配置`);
       } catch (e) {
         this.showToast(e.message, 'error');
+      }
+    },
+
+    async importSkillZip(event) {
+      try {
+        const input = event?.target;
+        const file = input?.files?.[0];
+        if (!file) return;
+        if (!String(file.name || '').toLowerCase().endsWith('.zip')) {
+          this.showToast('只支持导入 .zip Skill 包', 'error');
+          input.value = '';
+          return;
+        }
+        const contentBase64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onerror = () => reject(new Error('读取 zip 文件失败'));
+          reader.onload = () => {
+            const result = String(reader.result || '');
+            const marker = 'base64,';
+            const index = result.indexOf(marker);
+            if (index < 0) {
+              reject(new Error('无法解析 zip 文件内容'));
+              return;
+            }
+            resolve(result.slice(index + marker.length));
+          };
+          reader.readAsDataURL(file);
+        });
+        const result = await this.api('POST', '/settings/dispatch/skills/import-zip', {
+          mode: this.dispatchSettingsMode || 'file',
+          filename: file.name,
+          content_base64: contentBase64,
+        });
+        this.discoveredSkills = Array.isArray(result.discovered) ? result.discovered : [];
+        const imported = this.mergeDiscoveredSkills(this.discoveredSkills);
+        this.showToast(imported
+          ? `已导入 ${imported} 个 Skill，请记得保存配置`
+          : 'zip 已导入到主容器技能目录，当前没有新增条目');
+        input.value = '';
+      } catch (e) {
+        this.showToast(e.message, 'error');
+        if (event?.target) event.target.value = '';
       }
     },
 
