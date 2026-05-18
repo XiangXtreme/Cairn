@@ -1,3 +1,8 @@
+---
+name: "web-ssrf"
+description: "Use for Web SSRF, pseudo-protocol probing, and redirect-bypass tasks. Start with minimal requests, distinguish protocol and redirect behavior, and stop reopening duplicate blocked routes."
+---
+
 # Web SSRF
 
 适用于 Web SSRF / 伪协议 / 重定向绕过类题目的容器内技能。

@@ -1,3 +1,8 @@
+---
+name: "redis-protocol"
+description: "Use for SSRF-to-Redis, gopher payload construction, and Redis protocol probing tasks. Prefer small, explainable validation steps and report blockers instead of repeating equivalent routes."
+---
+
 # Redis Protocol
 
 适用于 SSRF 打 Redis / gopher 构造 / Redis 协议探测类题目的容器内技能。
