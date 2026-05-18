@@ -19,7 +19,7 @@ class ClaudeCodeDriver(SeedSessionDriver):
             "--fail",
             "-o",
             "/dev/null",
-            f"{env['ANTHROPIC_BASE_URL']}/v1/messages",
+            f"{env['ANTHROPIC_BASE_URL'].rstrip('/')}/v1/messages",
             "-H",
             f"Authorization: Bearer {env['ANTHROPIC_AUTH_TOKEN']}",
             "-H",
@@ -37,7 +37,7 @@ class ClaudeCodeDriver(SeedSessionDriver):
     def build_startup_healthcheck(self, worker: WorkerConfig) -> list[str]:
         env = worker.env
         return build_verbose_curl_healthcheck(
-            f"{env['ANTHROPIC_BASE_URL']}/v1/messages",
+            f"{env['ANTHROPIC_BASE_URL'].rstrip('/')}/v1/messages",
             headers=[
                 "-H",
                 f"Authorization: Bearer {env['ANTHROPIC_AUTH_TOKEN']}",
@@ -51,12 +51,13 @@ class ClaudeCodeDriver(SeedSessionDriver):
                 + env["ANTHROPIC_MODEL"]
                 + '","max_tokens":10,"messages":[{"role":"user","content":"ping"}]}'
             ),
+            require_json=True,
         )
 
     def describe_startup_healthcheck(self, worker: WorkerConfig) -> str:
         env = worker.env
         return render_curl_command(
-            f"{env['ANTHROPIC_BASE_URL']}/v1/messages",
+            f"{env['ANTHROPIC_BASE_URL'].rstrip('/')}/v1/messages",
             headers=[
                 "-H",
                 expand_env("Authorization: Bearer $ANTHROPIC_AUTH_TOKEN"),

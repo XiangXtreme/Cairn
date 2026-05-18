@@ -4,7 +4,7 @@ import abc
 import re
 import shlex
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from cairn.dispatcher.config import WorkerConfig
 
@@ -13,6 +13,7 @@ from cairn.dispatcher.config import WorkerConfig
 class DriverResult:
     argv: list[str]
     session: str | None = None
+    env: dict[str, str] = field(default_factory=dict)
 
 
 class WorkerDriver(abc.ABC):

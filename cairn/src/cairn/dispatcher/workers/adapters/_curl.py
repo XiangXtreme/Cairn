@@ -5,13 +5,15 @@ from dataclasses import dataclass
 
 
 _VERBOSE_CURL_SCRIPT = """
+import json
 import subprocess
 import sys
 import tempfile
 
-url = sys.argv[1]
-payload = sys.argv[2]
-args = sys.argv[3:]
+require_json = sys.argv[1] == "1"
+url = sys.argv[2]
+payload = sys.argv[3]
+args = sys.argv[4:]
 
 with tempfile.NamedTemporaryFile(delete=False) as body_file:
     body_path = body_file.name
@@ -31,12 +33,23 @@ if result.stderr:
     print(result.stderr, file=sys.stderr, end="" if result.stderr.endswith("\\n") else "\\n")
 if result.returncode != 0:
     raise SystemExit(result.returncode)
-raise SystemExit(0 if http_status.startswith("2") else 1)
+if not http_status.startswith("2"):
+    raise SystemExit(1)
+if require_json:
+    try:
+        parsed = json.loads(body)
+    except json.JSONDecodeError:
+        print("healthcheck expected JSON response body", file=sys.stderr)
+        raise SystemExit(1)
+    if not isinstance(parsed, dict):
+        print("healthcheck expected JSON object response body", file=sys.stderr)
+        raise SystemExit(1)
+raise SystemExit(0)
 """.strip()
 
 
-def build_verbose_curl_healthcheck(url: str, *, headers: list[str], payload: str) -> list[str]:
-    return ["python", "-c", _VERBOSE_CURL_SCRIPT, url, payload, *headers]
+def build_verbose_curl_healthcheck(url: str, *, headers: list[str], payload: str, require_json: bool = False) -> list[str]:
+    return ["python", "-c", _VERBOSE_CURL_SCRIPT, "1" if require_json else "0", url, payload, *headers]
 
 
 @dataclass(frozen=True, slots=True)

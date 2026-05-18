@@ -12,6 +12,7 @@ Commands:
   observer  Rebuild the local agentsview binary with FTS5, then restart cairn-observer
   all       Rebuild everything above
   check     Show service status and probe the main HTTP endpoints
+  runtime   Inspect generated worker runtime config artifacts under datas/cairn-runtime
   help      Show this help
 
 Examples:
@@ -19,6 +20,7 @@ Examples:
   ./scripts/dev-rebuild.sh observer
   ./scripts/dev-rebuild.sh all
   ./scripts/dev-rebuild.sh check
+  ./scripts/dev-rebuild.sh runtime
 EOF
 }
 
@@ -115,6 +117,59 @@ URLs:
 EOF
 }
 
+runtime_check() {
+  log "Runtime artifact scan"
+  python3 - <<'PY'
+from pathlib import Path
+import json
+
+root = Path("datas/cairn-runtime/projects")
+if not root.exists():
+    print("[INFO] No runtime project directory yet:", root)
+    raise SystemExit(0)
+
+provider_files = sorted(root.glob("*/.cairn/providers/*.json"))
+mcp_files = sorted(root.glob("*/.cairn/mcp/*.json"))
+skill_files = sorted(root.glob("*/.cairn/skills/*.json"))
+codex_configs = sorted(root.glob("*/.cairn/codex-home/*/config.toml"))
+claude_configs = sorted(root.glob("*/.cairn/claude-home/*/.claude.json"))
+
+print(f"providers: {len(provider_files)}")
+print(f"mcp files: {len(mcp_files)}")
+print(f"skill files: {len(skill_files)}")
+print(f"codex homes: {len(codex_configs)}")
+print(f"claude homes: {len(claude_configs)}")
+
+def preview_json(path: Path):
+    try:
+        payload = json.loads(path.read_text(encoding='utf-8'))
+    except Exception as exc:
+        return f"invalid json: {exc}"
+    if isinstance(payload, dict):
+        keys = ", ".join(sorted(payload.keys())[:6])
+        return f"dict keys: {keys}"
+    if isinstance(payload, list):
+        return f"list items: {len(payload)}"
+    return type(payload).__name__
+
+for label, items in [
+    ("provider", provider_files[:3]),
+    ("mcp", mcp_files[:3]),
+    ("skill", skill_files[:3]),
+]:
+    for path in items:
+        print(f" - {label}: {path} -> {preview_json(path)}")
+
+for path in codex_configs[:3]:
+    text = path.read_text(encoding="utf-8")
+    has_mcp = "[mcp_servers." in text
+    print(f" - codex: {path} -> mcp={has_mcp}")
+
+for path in claude_configs[:3]:
+    print(f" - claude: {path} -> {preview_json(path)}")
+PY
+}
+
 command="${1:-help}"
 
 case "$command" in
@@ -133,6 +188,9 @@ case "$command" in
     ;;
   check)
     health_check
+    ;;
+  runtime)
+    runtime_check
     ;;
   help|-h|--help)
     usage

@@ -94,6 +94,33 @@ class DockerRuntimeManager:
         self._put_text_file(container, target, content)
         return str(target)
 
+    def copy_directory(self, workspace_name: str, source_dir: str, relative_path: str) -> str:
+        container = self._require_workspace_container(workspace_name)
+        source = Path(source_dir).resolve()
+        if not source.is_dir():
+            raise ValueError(f"source directory does not exist: {source_dir}")
+        target = self.workspace_path(workspace_name) / PurePosixPath(relative_path)
+        self._put_directory(container, target, source)
+        return str(target)
+
+    def link_or_copy_directory(self, workspace_name: str, relative_path: str, target_path: str) -> str:
+        container = self._require_workspace_container(workspace_name)
+        link_path = self.workspace_path(workspace_name) / PurePosixPath(relative_path)
+        target = PurePosixPath(target_path)
+        self._ensure_container_dir(container, link_path.parent)
+        self._ensure_container_dir(container, target)
+        command = ["sh", "-lc", f"rm -rf {_sh_quote(str(link_path))} && ln -s {_sh_quote(str(target))} {_sh_quote(str(link_path))}"]
+        try:
+            result = container.exec_run(command, stdout=False, stderr=True)
+        except DockerException as exc:
+            raise RuntimeError(
+                f"failed to link {link_path} to {target} in container {container.name}: {exc}"
+            ) from exc
+        exit_code = result.exit_code if hasattr(result, "exit_code") else None
+        if exit_code not in (None, 0):
+            raise RuntimeError(f"failed to link {link_path} to {target} in container {container.name}: exit {exit_code}")
+        return str(link_path)
+
     def write_observer_text_file(self, relative_path: str, content: str) -> str:
         target = self._observer_root / relative_path
         resolved = target.resolve()
@@ -281,6 +308,16 @@ class DockerRuntimeManager:
         if exit_code not in (None, 0):
             raise RuntimeError(f"failed to create directory {path} in container {container.name}: exit {exit_code}")
 
+    def _put_directory(self, container: Container, path: PurePosixPath, source: Path) -> None:
+        self._ensure_container_dir(container, path.parent)
+        archive_path, archive = _directory_archive(path, source)
+        try:
+            ok = container.put_archive(archive_path, archive)
+        except DockerException as exc:
+            raise RuntimeError(f"failed to copy directory {source} to {path} in container {container.name}: {exc}") from exc
+        if not ok:
+            raise RuntimeError(f"failed to copy directory {source} to {path} in container {container.name}")
+
     @staticmethod
     def _is_name_conflict(exc: APIError) -> bool:
         explanation = getattr(exc, "explanation", "")
@@ -299,6 +336,34 @@ def _text_file_archive(path: PurePosixPath, content: str) -> tuple[str, bytes]:
         info.mode = 0o644
         tar.addfile(info, io.BytesIO(data))
     return str(parent), buffer.getvalue()
+
+
+def _directory_archive(path: PurePosixPath, source: Path) -> tuple[str, bytes]:
+    normalized = PurePosixPath("/") / path.relative_to("/") if path.is_absolute() else PurePosixPath("/") / path
+    parent = normalized.parent
+    dirname = normalized.name
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w") as tar:
+        for item in sorted(source.rglob("*")):
+            rel = item.relative_to(source)
+            arcname = PurePosixPath(dirname) / PurePosixPath(rel.as_posix())
+            info_name = str(arcname)
+            if item.is_dir():
+                info = tarfile.TarInfo(info_name)
+                info.type = tarfile.DIRTYPE
+                info.mode = 0o755
+                tar.addfile(info)
+                continue
+            data = item.read_bytes()
+            info = tarfile.TarInfo(info_name)
+            info.size = len(data)
+            info.mode = 0o644
+            tar.addfile(info, io.BytesIO(data))
+    return str(parent), buffer.getvalue()
+
+
+def _sh_quote(value: str) -> str:
+    return "'" + value.replace("'", "'\"'\"'") + "'"
 
 
 def _sanitize_name(value: str) -> str:

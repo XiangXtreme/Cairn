@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 import re
 
@@ -50,6 +51,38 @@ class LocalRuntimeManager:
         resolved.parent.mkdir(parents=True, exist_ok=True)
         resolved.write_text(content, encoding="utf-8")
         return str(resolved)
+
+    def copy_directory(self, workspace_name: str, source_dir: str, relative_path: str) -> str:
+        source = Path(source_dir).resolve()
+        if not source.is_dir():
+            raise ValueError(f"source directory does not exist: {source_dir}")
+        target = self._workspace_path(workspace_name) / relative_path
+        resolved = target.resolve()
+        workspace = self._workspace_path(workspace_name).resolve()
+        if workspace != resolved and workspace not in resolved.parents:
+            raise ValueError(f"refusing to copy outside workspace: {relative_path}")
+        if resolved.exists():
+            shutil.rmtree(resolved)
+        resolved.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(source, resolved)
+        return str(resolved)
+
+    def link_or_copy_directory(self, workspace_name: str, relative_path: str, target_path: str) -> str:
+        target = Path(target_path).expanduser().resolve()
+        target.mkdir(parents=True, exist_ok=True)
+        link = self._workspace_path(workspace_name) / relative_path
+        workspace = self._workspace_path(workspace_name).resolve()
+        resolved_link = link.resolve(strict=False)
+        if workspace != resolved_link and workspace not in resolved_link.parents:
+            raise ValueError(f"refusing to link outside workspace: {relative_path}")
+        if link.exists() or link.is_symlink():
+            if link.is_symlink() or link.is_file():
+                link.unlink()
+            else:
+                shutil.rmtree(link)
+        link.parent.mkdir(parents=True, exist_ok=True)
+        link.symlink_to(target, target_is_directory=True)
+        return str(link)
 
     def write_observer_text_file(self, relative_path: str, content: str) -> str:
         target = self._root / "observer" / relative_path

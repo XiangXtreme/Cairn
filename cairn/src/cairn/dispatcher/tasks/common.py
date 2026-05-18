@@ -16,6 +16,7 @@ from cairn.dispatcher.runtime.cancellation import TaskCancellation
 from cairn.dispatcher.runtime.heartbeat import HeartbeatLease
 from cairn.dispatcher.runtime.manager import RuntimeManager
 from cairn.dispatcher.runtime.process import ProcessResult
+from cairn.dispatcher.workers.runtime_injection import prepare_worker_runtime_files
 
 LOG_PREVIEW_LIMIT = 1200
 GRAPH_SNAPSHOT_ROOT = "prompts"
@@ -247,9 +248,11 @@ def run_healthcheck(
     lease: HeartbeatLease | None = None,
     cancellation: TaskCancellation | None = None,
 ) -> HealthcheckRun:
+    env = dict(worker.env)
+    env.update(prepare_worker_runtime_files(runtime_manager, workspace_name, worker))
     process = runtime_manager.build_exec_process(
         workspace_name,
-        dict(worker.env),
+        env,
         command,
         timeout_seconds=timeout_seconds,
     )
@@ -289,9 +292,11 @@ def run_worker_process(
         phase,
         timeout_seconds,
     )
+    env = dict(worker.env)
+    env.update(prepare_worker_runtime_files(runtime_manager, workspace_name, worker))
     process = runtime_manager.build_exec_process(
         workspace_name,
-        dict(worker.env),
+        env,
         argv,
         timeout_seconds=timeout_seconds,
     )

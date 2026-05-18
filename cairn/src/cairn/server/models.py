@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -8,6 +8,8 @@ from cairn.dispatcher.config import TaskType, WorkerType
 
 
 DispatchSettingsMode = Literal["file", "ui"]
+McpTransportType = Literal["stdio", "http"]
+ProviderKind = Literal["claudecode", "codex", "pi"]
 
 
 class Settings(BaseModel):
@@ -55,14 +57,21 @@ class DispatchWorkerSettings(BaseModel):
     task_types: list[TaskType]
     max_running: int = Field(gt=0)
     priority: int = Field(ge=0)
+    provider_id: str = ""
+    provider_supported: bool = False
     model: str = ""
     base_url: str = ""
     auth_token: str = ""
     has_auth_token: bool = False
     provider_api: str = ""
     context_window: int | None = Field(default=None, gt=0)
+    extra_env: dict[str, str] = Field(default_factory=dict)
+    mcp_server_ids: list[str] = Field(default_factory=list)
+    skill_ids: list[str] = Field(default_factory=list)
+    mcp_supported: bool = False
+    skill_supported: bool = False
 
-    @field_validator("name", "model", "base_url", "auth_token", "provider_api")
+    @field_validator("name", "provider_id", "model", "base_url", "auth_token", "provider_api")
     @classmethod
     def normalize_worker_text(cls, value: str) -> str:
         return value.strip()
@@ -76,6 +85,138 @@ class DispatchWorkerSettings(BaseModel):
             raise ValueError("task_types must be unique")
         return value
 
+    @field_validator("mcp_server_ids", "skill_ids")
+    @classmethod
+    def validate_binding_ids(cls, value: list[str]) -> list[str]:
+        cleaned = [item.strip() for item in value if item.strip()]
+        if len(set(cleaned)) != len(cleaned):
+            raise ValueError("binding ids must be unique")
+        return cleaned
+
+    @field_validator("extra_env")
+    @classmethod
+    def normalize_extra_env(cls, value: dict[str, str]) -> dict[str, str]:
+        return {
+            str(key).strip(): str(item).strip()
+            for key, item in value.items()
+            if str(key).strip()
+        }
+
+
+class DispatchModeInfo(BaseModel):
+    mode: DispatchSettingsMode = "file"
+    source_path: str
+    compiled_path: str
+    hot_reload_enabled: bool = True
+    compiled_updated_at: str | None = None
+    last_validation_error: str = ""
+
+
+class ProviderSettings(BaseModel):
+    id: str
+    name: str
+    enabled: bool = True
+    kind: ProviderKind
+    model: str = ""
+    base_url: str = ""
+    auth_token: str = ""
+    has_auth_token: bool = False
+    provider_api: str = ""
+    context_window: int | None = Field(default=None, gt=0)
+    extra_env: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("id", "name", "model", "base_url", "auth_token", "provider_api")
+    @classmethod
+    def normalize_provider_text(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("extra_env")
+    @classmethod
+    def normalize_provider_env(cls, value: dict[str, str]) -> dict[str, str]:
+        return {
+            str(key).strip(): str(item).strip()
+            for key, item in value.items()
+            if str(key).strip()
+        }
+
+
+class McpServerSettings(BaseModel):
+    id: str
+    name: str
+    enabled: bool = True
+    transport: McpTransportType
+    command: str = ""
+    url: str = ""
+    args: list[str] = Field(default_factory=list)
+    env: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("id", "name", "command", "url")
+    @classmethod
+    def normalize_mcp_text(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("args")
+    @classmethod
+    def normalize_mcp_args(cls, value: list[str]) -> list[str]:
+        return [item.strip() for item in value if item.strip()]
+
+    @field_validator("env")
+    @classmethod
+    def normalize_mcp_env(cls, value: dict[str, str]) -> dict[str, str]:
+        return {
+            str(key).strip(): str(item).strip()
+            for key, item in value.items()
+            if str(key).strip()
+        }
+
+
+class SkillSettings(BaseModel):
+    id: str
+    name: str
+    enabled: bool = True
+    path: str = ""
+    description: str = ""
+    enabled_claude: bool = False
+    enabled_codex: bool = False
+
+    @field_validator("id", "name", "path", "description")
+    @classmethod
+    def normalize_skill_text(cls, value: str) -> str:
+        return value.strip()
+
+
+class DiscoveredSkill(BaseModel):
+    id: str
+    name: str
+    path: str
+    description: str = ""
+    source: str = ""
+    already_registered: bool = False
+
+    @field_validator("id", "name", "path", "description", "source")
+    @classmethod
+    def normalize_discovered_skill_text(cls, value: str) -> str:
+        return value.strip()
+
+
+class WorkerBindingSettings(BaseModel):
+    worker_name: str
+    mcp_server_ids: list[str] = Field(default_factory=list)
+    skill_ids: list[str] = Field(default_factory=list)
+
+    @field_validator("worker_name")
+    @classmethod
+    def normalize_worker_name(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("mcp_server_ids", "skill_ids")
+    @classmethod
+    def normalize_ids(cls, value: list[str]) -> list[str]:
+        cleaned = [item.strip() for item in value if item.strip()]
+        if len(set(cleaned)) != len(cleaned):
+            raise ValueError("binding ids must be unique")
+        return cleaned
+
 
 class DispatchSettings(BaseModel):
     mode: DispatchSettingsMode = "file"
@@ -84,7 +225,12 @@ class DispatchSettings(BaseModel):
     runtime: DispatchRuntimeSettings
     tasks: DispatchTaskSettings
     workers: list[DispatchWorkerSettings]
-    restart_required: bool = True
+    mode_info: DispatchModeInfo
+    providers: list[ProviderSettings] = Field(default_factory=list)
+    mcp_servers: list[McpServerSettings] = Field(default_factory=list)
+    skills: list[SkillSettings] = Field(default_factory=list)
+    worker_bindings: list[WorkerBindingSettings] = Field(default_factory=list)
+    restart_required: bool = False
 
 
 class UpdateDispatchSettingsRequest(BaseModel):
@@ -92,6 +238,10 @@ class UpdateDispatchSettingsRequest(BaseModel):
     runtime: DispatchRuntimeSettings
     tasks: DispatchTaskSettings
     workers: list[DispatchWorkerSettings]
+    providers: list[ProviderSettings] = Field(default_factory=list)
+    mcp_servers: list[McpServerSettings] = Field(default_factory=list)
+    skills: list[SkillSettings] = Field(default_factory=list)
+    worker_bindings: list[WorkerBindingSettings] = Field(default_factory=list)
 
 
 class Fact(BaseModel):

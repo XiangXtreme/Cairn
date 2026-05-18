@@ -26,6 +26,7 @@ class CodexDriver(RegexSessionDriver):
             self._healthcheck_url(worker),
             headers=self._healthcheck_headers(worker),
             payload=self._healthcheck_payload(worker),
+            require_json=True,
         )
 
     def describe_startup_healthcheck(self, worker: WorkerConfig) -> str:
@@ -49,22 +50,6 @@ class CodexDriver(RegexSessionDriver):
                 "--dangerously-bypass-approvals-and-sandbox",
                 "--model",
                 env["CODEX_MODEL"],
-                "-c",
-                'model_provider="cairn"',
-                "-c",
-                'model_providers.cairn.name="cairn"',
-                "-c",
-                'model_providers.cairn.wire_api="responses"',
-                "-c",
-                "model_providers.cairn.supports_websockets=false",
-                "-c",
-                "model_providers.cairn.requires_openai_auth=true",
-                "-c",
-                'model_reasoning_effort="high"',
-                "-c",
-                f'model_providers.cairn.base_url="{env["CODEX_BASE_URL"]}"',
-                "-c",
-                'model_providers.cairn.env_key="OPENAI_API_KEY"',
                 "--",
                 prompt,
             ]
@@ -80,29 +65,13 @@ class CodexDriver(RegexSessionDriver):
             "--dangerously-bypass-approvals-and-sandbox",
             "--model",
             env["CODEX_MODEL"],
-            "-c",
-            'model_provider="cairn"',
-            "-c",
-            'model_providers.cairn.name="cairn"',
-            "-c",
-            'model_providers.cairn.wire_api="responses"',
-            "-c",
-            "model_providers.cairn.supports_websockets=false",
-            "-c",
-            "model_providers.cairn.requires_openai_auth=true",
-            "-c",
-            'model_reasoning_effort="high"',
-            "-c",
-            f'model_providers.cairn.base_url="{env["CODEX_BASE_URL"]}"',
-            "-c",
-            'model_providers.cairn.env_key="OPENAI_API_KEY"',
             "--",
             prompt,
         ]
 
     @staticmethod
     def _healthcheck_url(worker: WorkerConfig) -> str:
-        return f"{worker.env['CODEX_BASE_URL']}/responses"
+        return f"{worker.env['CODEX_BASE_URL'].rstrip('/')}/responses"
 
     @staticmethod
     def _healthcheck_headers(worker: WorkerConfig) -> list[str]:

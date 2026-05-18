@@ -20,7 +20,16 @@
   ::-webkit-scrollbar { width: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-  .overlay { background: rgba(15,23,42,0.25); backdrop-filter: blur(6px); }
+  .overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15,23,42,0.25);
+    backdrop-filter: blur(6px);
+  }
   .timeline-flash { animation: timelineFlash 1s ease-out; }
   .reason-chip-running { animation: reasonChipGlow 1.8s ease-in-out infinite; }
   .intent-chip-running { animation: intentChipGlow 1.8s ease-in-out infinite; }
@@ -458,6 +467,7 @@
     <div class="min-w-0">
       <div class="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">工作区设置</div>
       <h2 class="text-lg font-semibold tracking-tight text-slate-800">调度器控制台</h2>
+      <div class="mt-0.5 text-[10px] font-mono text-slate-400">ui settings-runtime-fix-20260518-0610</div>
     </div>
     <div class="flex-1"></div>
     <template x-if="dispatchSettingsMeta.path">
@@ -469,9 +479,30 @@
   </header>
 
   <div class="flex-1 overflow-y-auto p-4">
-    <div class="max-w-7xl mx-auto space-y-4">
-      <section class="grid grid-cols-1 xl:grid-cols-[1.1fr_1.9fr] gap-4">
-        <article class="rounded-3xl border border-slate-200/70 bg-white p-5 shadow-sm">
+    <div class="max-w-7xl mx-auto grid grid-cols-1 xl:grid-cols-[220px_minmax(0,1fr)] gap-4">
+      <aside class="rounded-3xl border border-slate-200/70 bg-white p-3 shadow-sm h-max">
+        <div class="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">设置分区</div>
+        <div class="space-y-1.5">
+          <template x-for="item in [
+            { id: 'mode', label: '运行模式', desc: '配置来源与热加载' },
+            { id: 'providers', label: 'Provider', desc: '模型源与鉴权配置' },
+            { id: 'workers', label: 'Agent / Worker', desc: '模型与任务覆盖' },
+            { id: 'mcp', label: 'MCP', desc: '统一资源与绑定' },
+            { id: 'skills', label: 'Skill', desc: '本地 skill 注册' },
+            { id: 'runtime', label: '调度参数', desc: '并发与收敛策略' },
+          ]" :key="item.id">
+            <button type="button" @click="openSettingsSection(item.id)"
+              class="w-full rounded-2xl px-3 py-3 text-left transition border"
+              :class="settingsSection === item.id ? 'border-brand-200 bg-brand-50/80 text-brand-900' : 'border-transparent bg-white text-slate-600 hover:bg-slate-50'">
+              <div class="text-sm font-semibold" x-text="item.label"></div>
+              <div class="mt-1 text-[11px] leading-5" :class="settingsSection === item.id ? 'text-brand-700' : 'text-slate-400'" x-text="item.desc"></div>
+            </button>
+          </template>
+        </div>
+      </aside>
+      <div class="space-y-4">
+      <section x-show="settingsSection === 'mode' || settingsSection === 'runtime'" class="grid grid-cols-1 xl:grid-cols-[1.1fr_1.9fr] gap-4">
+        <article x-show="settingsSection === 'mode'" class="rounded-3xl border border-slate-200/70 bg-white p-5 shadow-sm">
           <div class="flex items-start justify-between gap-3">
             <div>
               <div class="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">服务端</div>
@@ -498,7 +529,7 @@
           </div>
         </article>
 
-        <article class="rounded-3xl border border-slate-200/70 bg-white p-5 shadow-sm">
+        <article x-show="settingsSection === 'mode' || settingsSection === 'runtime'" class="rounded-3xl border border-slate-200/70 bg-white p-5 shadow-sm">
           <div class="flex items-start justify-between gap-3">
             <div>
               <div class="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">调度器</div>
@@ -518,8 +549,68 @@
             </div>
           </div>
           <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-            <div class="text-sm font-medium text-slate-700" x-text="dispatchSettingsMode === 'ui' ? '当前使用 UI 配置模式' : '当前使用配置文件模式'"></div>
-            <p class="mt-1 text-xs leading-5 text-slate-500" x-text="dispatchSettingsMode === 'ui' ? 'Agent 配置保存到 datas/cairn/dispatch_ui.yaml，不会进入 Git；第一次打开会从当前 YAML 克隆一份。' : '读取并保存 CAIRN_DISPATCH_CONFIG 指向的 YAML，适合把配置作为项目文件维护。'"></p>
+            <div class="text-sm font-medium text-slate-700" x-text="dispatchSettingsMode === 'ui' ? '当前使用 UI 托管模式' : '当前使用配置文件模式'"></div>
+            <p class="mt-1 text-xs leading-5 text-slate-500" x-text="dispatchSettingsMode === 'ui' ? '配置保存到 datas/cairn/dispatch_ui/ 多文件真源，并自动编译出 dispatch_ui.yaml。' : '读取并保存 CAIRN_DISPATCH_CONFIG 指向的 YAML，适合把配置作为项目文件维护。'"></p>
+          </div>
+          <div class="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">当前生效来源</div>
+                  <div class="mt-1 text-sm font-medium text-slate-800" x-text="dispatchSettingsMeta.source_path || dispatchSettingsMeta.path || '未加载'"></div>
+                </div>
+                <span class="rounded-full px-2.5 py-1 text-[10px] font-semibold"
+                  :class="dispatchSettingsMeta.writable ? 'border border-teal-200 bg-teal-50 text-teal-700' : 'border border-amber-200 bg-amber-50 text-amber-700'"
+                  x-text="dispatchSettingsMeta.writable ? '可写' : '只读'"></span>
+              </div>
+              <div class="mt-2 text-xs text-slate-500">编译产物：<span class="break-all" x-text="dispatchSettingsMeta.compiled_path || '未生成'"></span></div>
+            </div>
+            <div class="rounded-2xl border px-4 py-3"
+              :class="dispatchSettingsMeta.last_validation_error ? 'border-rose-200 bg-rose-50' : 'border-slate-200 bg-white'">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">热加载状态</div>
+                  <div class="mt-1 text-sm font-medium"
+                    :class="dispatchSettingsMeta.last_validation_error ? 'text-rose-700' : 'text-slate-800'"
+                    x-text="dispatchSettingsMeta.last_validation_error ? '最近一次编译校验失败' : (dispatchSettingsMeta.hot_reload_enabled ? '已开启热加载' : '已关闭热加载')"></div>
+                </div>
+                <span class="rounded-full px-2.5 py-1 text-[10px] font-semibold"
+                  :class="dispatchSettingsMeta.last_validation_error ? 'border border-rose-200 bg-white text-rose-700' : 'border border-brand-200 bg-brand-50 text-brand-700'"
+                  x-text="dispatchSettingsMeta.last_validation_error ? '需处理' : '正常'"></span>
+              </div>
+              <div class="mt-2 text-xs" :class="dispatchSettingsMeta.last_validation_error ? 'text-rose-700' : 'text-slate-500'">
+                <span x-show="dispatchSettingsMeta.compiled_updated_at">最近编译：<span x-text="formatDateTime(dispatchSettingsMeta.compiled_updated_at)"></span></span>
+                <span x-show="!dispatchSettingsMeta.compiled_updated_at">最近编译时间暂不可用</span>
+              </div>
+            </div>
+          </div>
+          <template x-if="dispatchSettingsMeta.last_validation_error">
+            <div class="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
+              <div class="text-xs font-medium uppercase tracking-[0.12em] text-rose-700">最近一次配置错误</div>
+              <pre class="mt-2 whitespace-pre-wrap break-words text-xs leading-5 text-rose-800" x-text="dispatchSettingsMeta.last_validation_error"></pre>
+            </div>
+          </template>
+          <div class="mt-4 grid grid-cols-2 xl:grid-cols-4 gap-3">
+            <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+              <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">Worker</div>
+              <div class="mt-1 text-lg font-semibold text-slate-800" x-text="dispatchForm.workers.length"></div>
+              <div class="mt-1 text-xs text-slate-500" x-text="configuredWorkerMixLabel()"></div>
+            </div>
+            <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+              <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">Provider</div>
+              <div class="mt-1 text-lg font-semibold text-slate-800" x-text="dispatchForm.providers.length"></div>
+              <div class="mt-1 text-xs text-slate-500" x-text="enabledProviderCount() ? `${enabledProviderCount()} 个启用` : '暂无启用项'"></div>
+            </div>
+            <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+              <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">MCP</div>
+              <div class="mt-1 text-lg font-semibold text-slate-800" x-text="dispatchForm.mcp_servers.length"></div>
+              <div class="mt-1 text-xs text-slate-500" x-text="enabledMcpCount() ? `${enabledMcpCount()} 个启用` : '暂无启用项'"></div>
+            </div>
+            <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+              <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">Skill</div>
+              <div class="mt-1 text-lg font-semibold text-slate-800" x-text="dispatchForm.skills.length"></div>
+              <div class="mt-1 text-xs text-slate-500" x-text="enabledSkillCount() ? `${enabledSkillCount()} 个启用` : '暂无启用项'"></div>
+            </div>
           </div>
           <div class="mt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
             <label class="block">
@@ -565,15 +656,100 @@
         </article>
       </section>
 
-      <section class="rounded-3xl border border-slate-200/70 bg-white p-5 shadow-sm">
+      <section x-show="settingsSection === 'providers'" class="rounded-3xl border border-slate-200/70 bg-white p-5 shadow-sm">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div>
+            <div class="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Provider</div>
+            <h3 class="mt-1 text-lg font-semibold tracking-tight text-slate-800">统一 Provider 资源</h3>
+            <p class="mt-1 text-sm text-slate-500">先维护模型源、Base URL、鉴权和附加环境变量，再由 Worker 绑定使用。</p>
+          </div>
+          <button @click="addProvider()" class="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 transition shadow-sm">新增 Provider</button>
+        </div>
+        <div class="mt-5 space-y-4">
+          <template x-for="(provider, idx) in dispatchForm.providers" :key="provider.id || idx">
+            <article class="rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
+              <div class="flex flex-col xl:flex-row xl:items-start justify-between gap-4">
+                <div class="min-w-0 flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <label class="block">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">标识</span>
+                    <input x-model="provider.id" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                  </label>
+                  <label class="block">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">名称</span>
+                    <input x-model="provider.name" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                  </label>
+                  <label class="block">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">类型</span>
+                    <select x-model="provider.kind" @change="onProviderKindChange(provider)" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                      <option value="claudecode">Claude Code</option>
+                      <option value="codex">Codex</option>
+                      <option value="pi">Pi</option>
+                    </select>
+                  </label>
+                  <label class="block">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">模型</span>
+                    <input x-model="provider.model" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                  </label>
+                  <label class="block">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">Base URL</span>
+                    <input x-model="provider.base_url" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                  </label>
+                  <label class="block">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">API Key / Token</span>
+                    <input x-model="provider.auth_token" placeholder="留空则保留现有 key" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                    <p class="mt-1 text-[11px] text-slate-400" x-text="provider.has_auth_token ? '已存在 key，留空会保持不变。' : '这个 Provider 还没有保存 key。'"></p>
+                  </label>
+                  <template x-if="provider.kind === 'pi'">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:col-span-2">
+                      <label class="block">
+                        <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">Provider API</span>
+                        <input x-model="provider.provider_api" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                      </label>
+                      <label class="block">
+                        <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">上下文窗口</span>
+                        <input type="number" x-model.number="provider.context_window" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                      </label>
+                    </div>
+                  </template>
+                </div>
+                <div class="shrink-0 space-y-3 xl:w-64">
+                  <div class="rounded-2xl border border-slate-200 bg-white px-3 py-3">
+                    <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">绑定概览</div>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                      <span class="rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1 text-[10px] font-semibold text-brand-700"
+                        x-text="`${providerWorkerCount(provider.id)} 个 Worker`"></span>
+                      <span class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-semibold text-slate-600"
+                        x-text="provider.has_auth_token ? '已存鉴权' : '未存鉴权'"></span>
+                      <span class="rounded-full px-2.5 py-1 text-[10px] font-semibold"
+                        :class="provider.enabled === false ? 'border border-slate-200 bg-slate-100 text-slate-500' : 'border border-teal-200 bg-teal-50 text-teal-700'"
+                        x-text="provider.enabled === false ? '当前禁用' : '当前启用'"></span>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button @click="provider.enabled = provider.enabled === false" class="rounded-xl border px-3 py-2 text-sm font-medium transition" :class="provider.enabled === false ? 'border-teal-200 text-teal-700 hover:bg-teal-50' : 'border-slate-200 text-slate-600 hover:bg-slate-50'">
+                      <span x-text="provider.enabled === false ? '启用' : '禁用'"></span>
+                    </button>
+                    <button @click="removeProvider(idx)" class="rounded-xl border border-rose-200 px-3 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 transition">移除</button>
+                  </div>
+                </div>
+              </div>
+            </article>
+          </template>
+        </div>
+      </section>
+
+      <section x-show="settingsSection === 'workers'" class="rounded-3xl border border-slate-200/70 bg-white p-5 shadow-sm">
         <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div>
             <div class="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Agent</div>
             <h3 class="mt-1 text-lg font-semibold tracking-tight text-slate-800">Worker 池</h3>
-            <p class="mt-1 text-sm text-slate-500">选择 Cairn 可使用的 Agent，并调整模型、Base URL、路由优先级和任务覆盖范围。</p>
+            <p class="mt-1 text-sm text-slate-500">选择 Cairn 可使用的 Agent，绑定 Provider，并调整任务覆盖范围与优先级。</p>
           </div>
           <div class="flex items-center gap-2">
             <button @click="loadDispatchSettings()" class="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition">重新加载</button>
+            <button @click="saveDispatchSettings()" :disabled="isSavingDispatchSettings || !!dispatchLoadError || !dispatchSettingsMeta.writable" class="rounded-2xl bg-slate-900 px-3.5 py-2 text-sm font-medium text-white hover:bg-slate-800 transition shadow-sm disabled:opacity-40 disabled:cursor-not-allowed">
+              <span x-text="isSavingDispatchSettings ? '保存中...' : '保存 Worker 配置'"></span>
+            </button>
             <button @click="addDispatchWorker()" class="rounded-2xl bg-brand-500 px-3.5 py-2 text-sm font-medium text-white hover:bg-brand-600 transition shadow-sm shadow-brand-200">新增 Worker</button>
           </div>
         </div>
@@ -625,12 +801,13 @@
 
               <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
                 <label class="block">
-                  <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">模型</span>
-                  <input x-model="worker.model" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition" :disabled="worker.type === 'mock'">
-                </label>
-                <label class="block">
-                  <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">Base URL</span>
-                  <input x-model="worker.base_url" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition" :disabled="worker.type === 'mock'">
+                  <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">Provider 绑定</span>
+                  <select x-model="worker.provider_id" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition" :disabled="worker.provider_supported === false || worker.type === 'mock'">
+                    <option value="">未绑定</option>
+                    <template x-for="provider in dispatchForm.providers.filter((item) => item.kind === worker.type)" :key="provider.id">
+                      <option :value="provider.id" x-text="provider.name || provider.id"></option>
+                    </template>
+                  </select>
                 </label>
                 <label class="block">
                   <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">并发上限</span>
@@ -642,24 +819,157 @@
                 </label>
               </div>
 
-              <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3" x-show="worker.type !== 'mock'">
-                <label class="block">
-                  <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">API Key / Token</span>
-                  <input x-model="worker.auth_token" placeholder="留空则保留现有 key" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
-                  <p class="mt-1 text-[11px] text-slate-400" x-text="worker.has_auth_token ? '已存在 key，留空会保持不变。' : '这个 Worker 还没有保存 key。'"></p>
-                </label>
-                <template x-if="worker.type === 'pi'">
-                  <div class="grid grid-cols-1 gap-3">
-                    <label class="block">
-                      <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">Provider API</span>
-                      <input x-model="worker.provider_api" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
-                    </label>
-                    <label class="block">
-                      <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">上下文窗口</span>
-                      <input type="number" x-model.number="worker.context_window" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
-                    </label>
+              <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">Provider 状态</div>
+                  <div class="mt-1 text-sm font-medium text-slate-800" x-text="workerBindingSummary(worker).provider"></div>
+                  <div class="mt-1 text-xs text-slate-500" x-text="workerBindingSummary(worker).providerDetail"></div>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">MCP 绑定</div>
+                  <div class="mt-1 text-sm font-medium text-slate-800" x-text="workerBindingSummary(worker).mcp"></div>
+                  <div class="mt-1 text-xs text-slate-500" x-text="workerBindingSummary(worker).mcpDetail"></div>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">Skill 绑定</div>
+                  <div class="mt-1 text-sm font-medium text-slate-800" x-text="workerBindingSummary(worker).skill"></div>
+                  <div class="mt-1 text-xs text-slate-500" x-text="workerBindingSummary(worker).skillDetail"></div>
+                </div>
+              </div>
+
+              <div class="mt-4 rounded-2xl border border-slate-200 bg-white/80 p-4" x-show="worker.type !== 'mock'">
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">Provider 摘要</div>
+                    <p class="mt-1 text-xs text-slate-500">绑定 Provider 时，模型源与鉴权信息以 Provider 为主；未绑定时使用 Worker 兼容字段。</p>
+                  </div>
+                  <button type="button" @click="worker.show_legacy_provider = !worker.show_legacy_provider" class="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition">
+                    <span x-text="worker.show_legacy_provider ? '收起兼容字段' : '高级设置'"></span>
+                  </button>
+                </div>
+
+                <template x-if="selectedProviderForWorker(worker)">
+                  <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+                      <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">Provider</div>
+                      <div class="mt-1 text-sm font-medium text-slate-800" x-text="selectedProviderForWorker(worker).name || selectedProviderForWorker(worker).id"></div>
+                      <div class="mt-1 text-xs text-slate-500" x-text="selectedProviderForWorker(worker).id"></div>
+                    </div>
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+                      <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">模型</div>
+                      <div class="mt-1 text-sm font-medium text-slate-800 break-all" x-text="selectedProviderForWorker(worker).model || '未设置'"></div>
+                    </div>
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 md:col-span-2">
+                      <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">Base URL</div>
+                      <div class="mt-1 text-sm font-medium text-slate-800 break-all" x-text="selectedProviderForWorker(worker).base_url || '未设置'"></div>
+                    </div>
                   </div>
                 </template>
+
+                <template x-if="!selectedProviderForWorker(worker)">
+                  <div class="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
+                    当前没有绑定 Provider，将使用下面的兼容字段作为直接配置。
+                  </div>
+                </template>
+
+                <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3" x-show="worker.show_legacy_provider || !selectedProviderForWorker(worker)">
+                  <label class="block">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">兼容模型</span>
+                    <input x-model="worker.model" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition" :disabled="worker.type === 'mock'">
+                  </label>
+                  <label class="block">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">兼容 Base URL</span>
+                    <input x-model="worker.base_url" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition" :disabled="worker.type === 'mock'">
+                  </label>
+                  <label class="block">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">兼容 API Key / Token</span>
+                    <input x-model="worker.auth_token" placeholder="留空则保留现有 key" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                    <p class="mt-1 text-[11px] text-slate-400" x-text="worker.has_auth_token ? '已存在 key，留空会保持不变。' : '这个 Worker 还没有保存 key。'"></p>
+                  </label>
+                  <template x-if="worker.type === 'pi'">
+                    <div class="grid grid-cols-1 gap-3">
+                      <label class="block">
+                        <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">兼容 Provider API</span>
+                        <input x-model="worker.provider_api" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                      </label>
+                      <label class="block">
+                        <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">兼容上下文窗口</span>
+                        <input type="number" x-model.number="worker.context_window" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                      </label>
+                    </div>
+                  </template>
+                </div>
+              </div>
+
+              <div class="mt-4 grid grid-cols-1 xl:grid-cols-[1.3fr_1fr] gap-4">
+                <div class="rounded-2xl border border-slate-200 bg-white/80 p-4">
+                  <div class="flex items-center justify-between gap-2">
+                    <div>
+                      <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">额外环境变量</div>
+                      <p class="mt-1 text-xs text-slate-500">用于补充 provider 专有参数，不覆盖模型、Base URL、Key 这类主字段。</p>
+                    </div>
+                    <button type="button" @click="addWorkerExtraEnv(worker)" class="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition">新增变量</button>
+                  </div>
+                  <div class="mt-3 space-y-2">
+                    <template x-for="(row, envIndex) in workerExtraEnvEntries(worker)" :key="`${row.key}-${envIndex}`">
+                      <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
+                        <input :value="row.key" @input="updateWorkerExtraEnvKey(worker, row.key, $event.target.value)" placeholder="KEY" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                        <input :value="row.value" @input="updateWorkerExtraEnvValue(worker, row.key, $event.target.value)" placeholder="VALUE" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                        <button type="button" @click="removeWorkerExtraEnv(worker, row.key)" class="rounded-xl border border-rose-200 px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 transition">删除</button>
+                      </div>
+                    </template>
+                    <template x-if="workerExtraEnvEntries(worker).length === 0">
+                      <div class="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-400">当前没有额外环境变量。</div>
+                    </template>
+                  </div>
+                </div>
+
+                <div class="rounded-2xl border border-slate-200 bg-white/80 p-4">
+                  <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">能力绑定</div>
+                  <div class="mt-3">
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-sm font-medium text-slate-700">MCP</span>
+                      <span class="rounded-full px-2.5 py-1 text-[10px] font-semibold"
+                        :class="worker.mcp_supported ? 'bg-teal-50 text-teal-700 border border-teal-200' : 'bg-slate-100 text-slate-500 border border-slate-200'"
+                        x-text="worker.mcp_supported ? '已接入' : '未接入'"></span>
+                    </div>
+                    <div class="mt-2 flex flex-wrap gap-2" x-show="worker.mcp_supported">
+                      <template x-for="server in dispatchForm.mcp_servers" :key="server.id">
+                        <button type="button" @click="toggleWorkerMcp(worker, server.id)"
+                          class="rounded-full border px-3 py-1.5 text-xs font-medium transition"
+                          :class="(worker.mcp_server_ids || []).includes(server.id)
+                            ? 'border-brand-200 bg-brand-50 text-brand-700'
+                            : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'">
+                          <span x-text="server.name || server.id"></span>
+                        </button>
+                      </template>
+                    </div>
+                    <p class="mt-2 text-xs text-slate-400" x-show="worker.mcp_supported && dispatchForm.mcp_servers.length === 0">还没有配置 MCP 资源。</p>
+                    <p class="mt-2 text-xs text-slate-400" x-show="!worker.mcp_supported" x-text="worker.type === 'pi' ? 'Pi 暂未接入 MCP 注入，当前先作为预留能力展示。' : '当前 Worker 类型暂不支持 MCP 注入。'"></p>
+                  </div>
+
+                  <div class="mt-4">
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-sm font-medium text-slate-700">Skill</span>
+                      <span class="rounded-full px-2.5 py-1 text-[10px] font-semibold"
+                        :class="worker.skill_supported ? 'bg-teal-50 text-teal-700 border border-teal-200' : 'bg-slate-100 text-slate-500 border border-slate-200'"
+                        x-text="worker.skill_supported ? '已接入' : '预留中'"></span>
+                    </div>
+                    <div class="mt-2 flex flex-wrap gap-2" x-show="worker.skill_supported">
+                      <template x-for="skill in dispatchForm.skills" :key="skill.id">
+                        <button type="button" @click="toggleWorkerSkill(worker, skill.id)"
+                          class="rounded-full border px-3 py-1.5 text-xs font-medium transition"
+                          :class="(worker.skill_ids || []).includes(skill.id)
+                            ? 'border-brand-200 bg-brand-50 text-brand-700'
+                            : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'">
+                          <span x-text="skill.name || skill.id"></span>
+                        </button>
+                      </template>
+                    </div>
+                    <p class="mt-2 text-xs text-slate-400" x-show="worker.skill_supported && dispatchForm.skills.length === 0">还没有注册 Skill。</p>
+                    <p class="mt-2 text-xs text-slate-400" x-show="!worker.skill_supported" x-text="worker.type === 'pi' ? 'Pi 当前明确标记为 Skill 预留态，暂不自动注入。' : '当前 Worker 类型暂未接入 Skill 同步。'"></p>
+                  </div>
+                </div>
               </div>
 
               <div class="mt-4">
@@ -686,19 +996,300 @@
             <p class="mt-1 text-xs">新增 Worker 后，调度器就可以选择它。</p>
           </div>
         </template>
-
-        <div class="mt-5 flex flex-col lg:flex-row lg:items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+        <div class="mt-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 rounded-[24px] border border-slate-200 bg-slate-50/80 px-5 py-4">
           <div>
-            <div class="text-sm font-medium text-amber-900" x-text="dispatchSettingsMode === 'ui' ? '保存会更新 datas 下的 UI 配置，dispatcher 会自动热加载。' : '保存会更新当前 YAML 文件，dispatcher 会自动热加载。'"></div>
-            <p class="mt-1 text-xs text-amber-700" x-text="dispatchSettingsMeta.writable ? (dispatchSettingsMode === 'ui' ? '热加载影响下一次派发，已经启动的 Agent 会继续使用启动时的配置跑完。' : '热加载影响下一次派发；如果你切换配置来源模式，仍需要用对应环境变量启动 dispatcher。') : '服务端当前只能只读访问这个配置，因此无法保存。'"></p>
+            <div class="text-sm font-medium text-slate-800" x-text="dispatchSettingsMode === 'ui' ? '保存后会写入 UI 真源并重新编译 dispatch_ui.yaml。' : '保存后会更新当前 YAML 配置。'"></div>
+            <p class="mt-1 text-xs text-slate-400" x-text="dispatchSettingsMeta.writable ? '已启动的 Agent 继续使用旧配置，新任务会自动读取最新 Worker 设置。' : '当前配置源只读，暂时无法保存。'"></p>
           </div>
-          <button @click="saveDispatchSettings()" :disabled="isSavingDispatchSettings || !!dispatchLoadError || !dispatchSettingsMeta.writable" class="shrink-0 rounded-2xl bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 transition shadow-sm shadow-brand-200 disabled:opacity-40 disabled:cursor-not-allowed">
-            <span x-text="isSavingDispatchSettings ? '保存中...' : '保存调度器配置'"></span>
+          <button @click="saveDispatchSettings()" :disabled="isSavingDispatchSettings || !!dispatchLoadError || !dispatchSettingsMeta.writable" class="shrink-0 rounded-2xl bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-800 transition disabled:opacity-40 disabled:cursor-not-allowed">
+            <span x-text="isSavingDispatchSettings ? '保存中...' : '保存 Worker 配置'"></span>
           </button>
+        </div>
+      </section>
+
+      <section x-show="settingsSection === 'mcp'" class="rounded-3xl border border-slate-200/70 bg-white p-5 shadow-sm">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div>
+            <div class="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">MCP</div>
+            <h3 class="mt-1 text-lg font-semibold tracking-tight text-slate-800">统一 MCP 注册中心</h3>
+            <p class="mt-1 text-sm text-slate-500">更接近 cc-switch 的统一注册方式：先登记 MCP 资源，再按 Worker 启用与同步。</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <button @click="addMcpServer()" class="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 transition shadow-sm">新增 MCP</button>
+            <button @click="syncDispatchResources()" class="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition">重新加载资源</button>
+          </div>
+        </div>
+        <div class="mt-4 grid grid-cols-1 xl:grid-cols-[0.95fr_1.05fr] gap-4">
+          <div class="rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">启用概况</div>
+                <div class="mt-1 text-sm text-slate-500">按运行器统计当前启用的 MCP 绑定数。</div>
+              </div>
+              <span class="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700"
+                x-text="`${enabledMcpCount()} / ${dispatchForm.mcp_servers.length}`"></span>
+            </div>
+            <div class="mt-4 grid grid-cols-2 gap-3">
+              <template x-for="entry in mcpAppSummaryCards()" :key="entry.key">
+                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400" x-text="entry.label"></div>
+                  <div class="mt-1 text-lg font-semibold text-slate-800" x-text="entry.count"></div>
+                  <div class="mt-1 text-xs text-slate-500" x-text="entry.detail"></div>
+                </div>
+              </template>
+            </div>
+            <div class="mt-4 rounded-2xl border border-dashed border-slate-200 bg-white/80 px-4 py-3 text-xs leading-5 text-slate-500">
+              Claude Code / Codex 当前支持注入；Pi 保持预留，不自动同步。
+            </div>
+          </div>
+          <div class="rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">运行器绑定矩阵</div>
+                <div class="mt-1 text-sm text-slate-500">每个 Worker 启用了哪些 MCP，一眼看清。</div>
+              </div>
+            </div>
+            <div class="mt-4 space-y-3">
+              <template x-for="worker in dispatchForm.workers" :key="`mcp-matrix-${worker.name}`">
+                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]"
+                      :class="dispatchWorkerTypeClass(worker.type)"
+                      x-text="workerTypeLabel(worker.type)"></span>
+                    <span class="text-sm font-medium text-slate-800" x-text="worker.name"></span>
+                  </div>
+                  <div class="mt-3 flex flex-wrap gap-2">
+                    <template x-if="worker.mcp_supported && (worker.mcp_server_ids || []).length">
+                      <template x-for="serverId in worker.mcp_server_ids" :key="`${worker.name}-${serverId}`">
+                        <span class="rounded-full border px-3 py-1.5 text-xs font-medium"
+                          :class="resourceBadgeClass(findMcpServer(serverId)?.enabled !== false)">
+                          <span x-text="findMcpServer(serverId)?.name || serverId"></span>
+                        </span>
+                      </template>
+                    </template>
+                    <template x-if="!worker.mcp_supported || !(worker.mcp_server_ids || []).length">
+                      <span class="text-xs text-slate-400" x-text="worker.mcp_supported ? '未绑定 MCP' : '该运行器未接入 MCP'"></span>
+                    </template>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+        <div class="mt-5 space-y-4">
+          <template x-for="(server, idx) in dispatchForm.mcp_servers" :key="server.id || idx">
+            <article class="rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
+              <div class="flex flex-col xl:flex-row xl:items-start justify-between gap-4">
+                <div class="min-w-0 flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <label class="block">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">标识</span>
+                    <input x-model="server.id" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                  </label>
+                  <label class="block">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">名称</span>
+                    <input x-model="server.name" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                  </label>
+                  <label class="block">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">传输方式</span>
+                    <select x-model="server.transport" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                      <option value="stdio">stdio</option>
+                      <option value="http">http</option>
+                    </select>
+                  </label>
+                  <label class="block">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400" x-text="server.transport === 'stdio' ? '命令' : 'URL'"></span>
+                    <input :value="server.transport === 'stdio' ? server.command : server.url" @input="server.transport === 'stdio' ? (server.command = $event.target.value) : (server.url = $event.target.value)" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                  </label>
+                  <label class="block md:col-span-2" x-show="server.transport === 'stdio'">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">参数</span>
+                    <input :value="(server.args || []).join(' ')" @input="server.args = splitArgsInput($event.target.value)" placeholder="例如：-y @upstash/context7-mcp" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                  </label>
+                </div>
+                <div class="shrink-0 space-y-3 xl:w-72">
+                  <div class="rounded-2xl border border-slate-200 bg-white px-3 py-3">
+                    <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">注册状态</div>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                      <span class="rounded-full px-2.5 py-1 text-[10px] font-semibold"
+                        :class="server.enabled === false ? 'border border-slate-200 bg-slate-100 text-slate-500' : 'border border-emerald-200 bg-emerald-50 text-emerald-700'"
+                        x-text="server.enabled === false ? '未启用' : '已启用'"></span>
+                      <span class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-semibold text-slate-600"
+                        x-text="`${mcpWorkerCount(server.id)} 个 Worker`"></span>
+                    </div>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                      <template x-for="worker in workersUsingMcp(server.id)" :key="`${server.id}-${worker.name}`">
+                        <span class="rounded-full border px-2.5 py-1 text-[10px] font-semibold"
+                          :class="dispatchWorkerTypeClass(worker.type)">
+                          <span x-text="worker.name"></span>
+                        </span>
+                      </template>
+                      <template x-if="workersUsingMcp(server.id).length === 0">
+                        <span class="text-xs text-slate-400">还没有 Worker 使用它</span>
+                      </template>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button @click="server.enabled = server.enabled === false" class="rounded-xl border px-3 py-2 text-sm font-medium transition" :class="server.enabled === false ? 'border-teal-200 text-teal-700 hover:bg-teal-50' : 'border-slate-200 text-slate-600 hover:bg-slate-50'">
+                      <span x-text="server.enabled === false ? '启用' : '禁用'"></span>
+                    </button>
+                    <button @click="removeMcpServer(idx)" class="rounded-xl border border-rose-200 px-3 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 transition">移除</button>
+                  </div>
+                </div>
+              </div>
+            </article>
+          </template>
+        </div>
+      </section>
+
+      <section x-show="settingsSection === 'skills'" class="rounded-3xl border border-slate-200/70 bg-white p-0 shadow-sm overflow-hidden">
+        <div class="px-8 pt-7 pb-6 border-b border-slate-200/80">
+          <div class="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+            <div class="min-w-0">
+              <div class="flex items-center gap-4">
+                <button type="button" class="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-500">
+                  <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><path d="m15 19-7-7 7-7"/></svg>
+                </button>
+                <div>
+                  <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Skills</div>
+                  <h3 class="mt-1 text-4xl font-semibold tracking-tight text-slate-900">容器 Skills 管理</h3>
+                </div>
+              </div>
+              <div class="mt-6 rounded-[24px] border border-slate-200 bg-slate-50/80 px-5 py-5">
+                <div class="flex flex-wrap items-center gap-3">
+                  <span class="inline-flex items-center rounded-full border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800">已安装</span>
+                  <template x-for="item in skillAppCountChips()" :key="item.key">
+                    <span class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold"
+                      :class="item.className">
+                      <img x-show="item.iconSrc" :src="item.iconSrc" :alt="item.label" class="h-4 w-4 rounded-sm object-contain opacity-80">
+                      <span x-text="`${item.label}:`"></span>
+                      <span x-text="item.count"></span>
+                    </span>
+                  </template>
+                </div>
+              </div>
+            </div>
+            <div class="flex flex-wrap items-center gap-6 text-sm text-slate-500">
+              <button @click="showToast('备份恢复面板将在下一步接入', 'info')" class="inline-flex items-center gap-2 hover:text-slate-800 transition">
+                <span class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 shadow-sm">
+                  <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 8v5l3 3"/><path d="M3.05 11a9 9 0 1 1 .5 4"/><path d="M3 4v5h5"/></svg>
+                </span>
+                从备份中恢复
+              </button>
+              <button @click="showToast('ZIP 安装入口将在下一步接入', 'info')" class="inline-flex items-center gap-2 hover:text-slate-800 transition">
+                <span class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 shadow-sm">
+                  <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+                </span>
+                从 ZIP 安装
+              </button>
+              <button @click="importExistingSkills()" class="inline-flex items-center gap-2 hover:text-slate-800 transition">
+                <span class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 shadow-sm">
+                  <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+                </span>
+                导入容器技能
+              </button>
+              <button @click="discoverSkills()" class="inline-flex items-center gap-2 hover:text-slate-800 transition">
+                <span class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 shadow-sm">
+                  <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                </span>
+                扫描容器技能
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="px-8 py-5">
+          <div class="flex items-center justify-between gap-3 text-slate-500">
+            <div class="text-sm">共 <span class="font-semibold text-slate-800" x-text="dispatchForm.skills.length"></span> 个技能条目</div>
+            <button @click="showToast('更新检查入口将在下一步接入', 'info')" class="inline-flex items-center gap-2 text-sm hover:text-slate-800 transition">
+              <span class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 shadow-sm">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.708"/><path d="M3 3v6h6"/></svg>
+              </span>
+              检查更新
+            </button>
+          </div>
+
+          <div class="mt-6 overflow-hidden rounded-[28px] border border-slate-200 bg-slate-50/60">
+            <template x-if="discoveredSkills.length > 0">
+              <div class="px-6 py-4 border-b border-slate-200 bg-sky-50/70">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="text-sm font-medium text-sky-800">最近发现到的 Skill</span>
+                  <template x-for="skill in discoveredSkills.slice(0, 6)" :key="`discovered-${skill.path}`">
+                    <span class="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-white px-3 py-1 text-xs font-medium text-sky-700 shadow-sm">
+                      <span class="inline-flex h-4 w-4 items-center justify-center rounded-full bg-sky-100 text-sky-600">
+                        <svg class="h-2.5 w-2.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m12 5 2.2 4.46 4.92.72-3.56 3.47.84 4.9L12 16.7l-4.4 2.32.84-4.9-3.56-3.47 4.92-.72L12 5Z"/></svg>
+                      </span>
+                      <span x-text="skill.name"></span>
+                      <span class="text-sky-400" x-show="skill.already_registered">已注册</span>
+                    </span>
+                  </template>
+                  <span class="text-xs text-sky-500" x-show="discoveredSkills.length > 6" x-text="`+${discoveredSkills.length - 6} 更多`"></span>
+                </div>
+              </div>
+            </template>
+            <template x-if="dispatchForm.skills.length === 0">
+              <div class="px-6 py-16 text-center">
+                <div class="text-lg font-medium text-slate-800">还没有 Skill</div>
+                <div class="mt-2 text-sm text-slate-400">先新增、扫描，或者登记要挂载给容器 agent 的技能目录。</div>
+              </div>
+            </template>
+            <template x-for="(skill, idx) in dispatchForm.skills" :key="skill.id || idx">
+              <article class="px-6 py-5 border-b border-slate-200 last:border-b-0 bg-white/80">
+                <div class="flex items-start gap-4">
+                  <div class="min-w-0 flex-1">
+                    <div class="flex flex-wrap items-center gap-3">
+                      <input x-model="skill.name" class="min-w-0 bg-transparent text-[18px] font-semibold leading-6 text-slate-900 focus:outline-none" placeholder="Skill 名称">
+                      <span class="text-sm text-slate-400" x-text="skillPathExists(skill.path) ? '本地' : '未定位'"></span>
+                    </div>
+                    <div class="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-400">
+                      <input x-model="skill.id" class="min-w-0 bg-transparent text-slate-500 focus:outline-none" placeholder="skill_id">
+                      <span class="text-slate-300">·</span>
+                      <input x-model="skill.path" class="min-w-0 flex-1 bg-transparent text-slate-400 focus:outline-none" placeholder="/path/to/skill">
+                    </div>
+                    <textarea x-model="skill.description" rows="2" class="mt-3 w-full resize-none bg-transparent text-base leading-7 text-slate-600 focus:outline-none" placeholder="描述这个 skill 的用途、适用场景和能力边界"></textarea>
+                  </div>
+                  <div class="flex shrink-0 items-center gap-3 pl-4">
+                    <template x-for="item in skillAppCountChips()" :key="`${skill.id}-${item.key}`">
+                      <button type="button"
+                        @click="toggleSkillApp(skill, item.key)"
+                        class="inline-flex h-12 min-w-12 items-center justify-center gap-1.5 rounded-full border bg-white px-3 text-sm font-semibold shadow-sm transition"
+                        :class="skillAppEnabled(skill, item.key)
+                          ? (item.key === 'claude'
+                              ? 'border-orange-200 bg-orange-50 text-orange-600'
+                              : item.key === 'codex'
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-600'
+                                : 'border-brand-200 bg-brand-50 text-brand-700')
+                          : 'border-slate-200 text-slate-300 hover:bg-slate-50'">
+                        <img x-show="item.iconSrc" :src="item.iconSrc" :alt="item.label" class="h-4 w-4 rounded-sm object-contain opacity-75">
+                        <span x-text="skillAppEnabled(skill, item.key) ? '开' : '关'"></span>
+                      </button>
+                    </template>
+                    <button @click="skill.enabled = skill.enabled === false" class="inline-flex h-12 w-12 items-center justify-center rounded-2xl border shadow-sm transition"
+                      :class="skill.enabled === false ? 'border-slate-200 bg-white text-slate-400 hover:bg-slate-100' : 'border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100'">
+                      <svg x-show="skill.enabled !== false" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>
+                      <svg x-show="skill.enabled === false" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><path d="M6 12h12"/></svg>
+                    </button>
+                    <button @click="removeSkill(idx)" class="inline-flex h-12 w-12 items-center justify-center rounded-2xl text-slate-400 hover:bg-rose-50 hover:text-rose-500 transition">
+                      <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4.75A1.75 1.75 0 0 1 9.75 3h4.5A1.75 1.75 0 0 1 16 4.75V6"/><path d="M19 6l-.63 11.338A2 2 0 0 1 16.37 19.5H7.63a2 2 0 0 1-1.997-2.162L5 6"/></svg>
+                    </button>
+                  </div>
+                </div>
+              </article>
+            </template>
+          </div>
+
+          <div class="mt-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 rounded-[24px] border border-slate-200 bg-slate-50/80 px-5 py-4">
+            <div>
+              <div class="text-sm font-medium text-slate-800" x-text="dispatchSettingsMode === 'ui' ? '保存后会写入 UI 真源并重新编译 dispatch_ui.yaml。' : '保存后会更新当前 YAML 配置。'"></div>
+              <p class="mt-1 text-xs text-slate-400" x-text="dispatchSettingsMeta.writable ? '已启动的 Agent 继续使用当前配置，新任务会自动读取最新技能注册表。' : '当前配置源只读，暂时无法保存。'"></p>
+            </div>
+            <button @click="saveDispatchSettings()" :disabled="isSavingDispatchSettings || !!dispatchLoadError || !dispatchSettingsMeta.writable" class="shrink-0 rounded-2xl bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-800 transition disabled:opacity-40 disabled:cursor-not-allowed">
+              <span x-text="isSavingDispatchSettings ? '保存中...' : '保存 Skills 配置'"></span>
+            </button>
+          </div>
         </div>
       </section>
     </div>
   </div>
+</div>
 </div>
 
 <!-- ═══════════ GRAPH VIEW ═══════════ -->
@@ -1320,26 +1911,6 @@
   </div>
 </div>
 
-<!-- Settings -->
-<div x-show="showSettings" x-cloak class="fixed inset-0 z-50 flex items-center justify-center overlay" @click.self="showSettings = false">
-  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 border border-slate-200/60" @click.stop>
-    <h3 class="text-base font-semibold text-slate-700 mb-4">服务端设置</h3>
-    <div>
-      <label class="text-[11px] text-slate-400 mb-1 block font-medium">意图超时（秒）</label>
-      <input type="number" x-model.number="settingsForm.intent_timeout" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
-    </div>
-    <div class="mt-4">
-      <label class="text-[11px] text-slate-400 mb-1 block font-medium">推理超时（秒）</label>
-      <input type="number" x-model.number="settingsForm.reason_timeout" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
-      <p class="text-[11px] text-slate-400 mt-2">共享后端配置。</p>
-    </div>
-    <div class="flex justify-end gap-2 mt-5">
-      <button @click="showSettings = false" class="px-4 py-2 text-sm text-slate-500 hover:bg-slate-50 rounded-xl transition">关闭</button>
-      <button @click="saveServerSettings()" class="px-4 py-2 text-sm bg-brand-500 text-white rounded-xl font-medium hover:bg-brand-600 transition shadow-sm shadow-brand-200">保存服务端设置</button>
-    </div>
-  </div>
-</div>
-
 <!-- Export Preview -->
 <div x-show="showYamlModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center overlay" @click.self="showYamlModal = false">
   <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-4 border border-slate-200/60 overflow-hidden" @click.stop>
@@ -1431,7 +2002,6 @@ function cairnApp() {
     showRenameModal: false,
     showCloneModal: false,
     showLocalPrefs: false,
-    showSettings: false,
     showYamlModal: false,
     exportTab: 'yaml',
     exportProjectId: '',
@@ -1447,6 +2017,7 @@ function cairnApp() {
     cloneForm: { projectId: '', originalTitle: '', title: '' },
     localPrefs: { actor_name: 'Human', layout_mode: 'dagre_tb' },
     settingsForm: { intent_timeout: 5, reason_timeout: 5 },
+    settingsSection: 'mode',
     dispatchForm: {
       runtime: { interval: 3, max_workers: 1, max_running_projects: 1, max_project_workers: 1, healthcheck_timeout: 20, prompt_group: 'default' },
       tasks: {
@@ -1455,12 +2026,26 @@ function cairnApp() {
         explore: { timeout: 300, conclude_timeout: 90 },
       },
       workers: [],
+      providers: [],
+      mcp_servers: [],
+      skills: [],
+      worker_bindings: [],
     },
     dispatchSettingsMode: '',
-    dispatchSettingsMeta: { path: '', writable: false, restart_required: true },
+    dispatchSettingsMeta: {
+      path: '',
+      writable: false,
+      restart_required: false,
+      source_path: '',
+      compiled_path: '',
+      hot_reload_enabled: true,
+      compiled_updated_at: '',
+      last_validation_error: '',
+    },
     dispatchLoadError: '',
     isLoadingDispatchSettings: false,
     isSavingDispatchSettings: false,
+    discoveredSkills: [],
     settingsReturnHash: '#/',
     deleteConfirm: { id: '', title: '' },
     isDeletingProject: false,
@@ -1491,20 +2076,27 @@ function cairnApp() {
       window.addEventListener('pointermove', this._panelResizeMove);
       window.addEventListener('pointerup', this._panelResizeStop);
       this.loadLocalPrefs();
+      window.addEventListener('hashchange', () => { void this.handleRoute(); });
+      await this.handleRoute({ initial: true });
       await this.loadProjects();
       await this.loadSettings();
       await this.loadDispatchSettings();
       this.startPolling();
-      window.addEventListener('hashchange', () => { void this.handleRoute(); });
       await this.handleRoute();
     },
 
-    async handleRoute() {
+    async handleRoute(options = {}) {
       const hash = location.hash || '#/';
       if (hash === '#/settings') {
         this.view = 'settings';
-        await this.loadSettings();
-        await this.loadDispatchSettings();
+        this.selectedProjectId = '';
+        this.project = null;
+        this.teardownAutoFit();
+        if (this.cy) { this.cy.destroy(); this.cy = null; }
+        if (!options.initial) {
+          await this.loadSettings();
+          await this.loadDispatchSettings();
+        }
         return;
       }
       const m = hash.match(/^#\/projects\/(.+)$/);
@@ -1520,7 +2112,10 @@ function cairnApp() {
 
     openSettingsView() {
       this.settingsReturnHash = location.hash && location.hash !== '#/settings' ? location.hash : '#/';
+      this.view = 'settings';
       location.hash = '#/settings';
+      void this.loadSettings();
+      void this.loadDispatchSettings();
     },
 
     closeSettingsView() {
@@ -2021,6 +2616,19 @@ function cairnApp() {
         this.dispatchForm = {
           runtime: { ...payload.runtime },
           tasks: this.normalizeDispatchTasks(payload.tasks),
+          providers: (payload.providers || []).map((provider) => ({
+            id: provider.id || '',
+            name: provider.name || '',
+            enabled: provider.enabled !== false,
+            kind: provider.kind || 'codex',
+            model: provider.model || '',
+            base_url: provider.base_url || '',
+            auth_token: '',
+            has_auth_token: !!provider.has_auth_token,
+            provider_api: provider.provider_api || '',
+            context_window: provider.context_window ?? null,
+            extra_env: this.sanitizeExtraEnv(provider.extra_env || {}),
+          })),
           workers: (payload.workers || []).map((worker) => ({
             source_name: worker.source_name || worker.name || '',
             name: worker.name || '',
@@ -2029,18 +2637,51 @@ function cairnApp() {
             task_types: Array.isArray(worker.task_types) ? [...worker.task_types] : ['bootstrap', 'reason', 'explore'],
             max_running: worker.max_running || 1,
             priority: worker.priority || 0,
+            provider_id: worker.provider_id || '',
+            provider_supported: worker.provider_supported !== false,
             model: worker.model || '',
             base_url: worker.base_url || '',
             auth_token: '',
             has_auth_token: !!worker.has_auth_token,
             provider_api: worker.provider_api || '',
             context_window: worker.context_window ?? null,
+            extra_env: this.sanitizeExtraEnv(worker.extra_env || {}),
+            mcp_server_ids: Array.isArray(worker.mcp_server_ids) ? [...worker.mcp_server_ids] : [],
+            skill_ids: Array.isArray(worker.skill_ids) ? [...worker.skill_ids] : [],
+            mcp_supported: worker.mcp_supported !== false,
+            skill_supported: worker.skill_supported === true,
+            show_legacy_provider: false,
           })),
+          mcp_servers: (payload.mcp_servers || []).map((server) => ({
+            id: server.id || '',
+            name: server.name || '',
+            enabled: server.enabled !== false,
+            transport: server.transport || 'stdio',
+            command: server.command || '',
+            url: server.url || '',
+            args: Array.isArray(server.args) ? [...server.args] : [],
+            env: server.env || {},
+          })),
+          skills: (payload.skills || []).map((skill) => ({
+            id: skill.id || '',
+            name: skill.name || '',
+            enabled: skill.enabled !== false,
+            path: skill.path || '',
+            description: skill.description || '',
+            enabled_claude: skill.enabled_claude === true,
+            enabled_codex: skill.enabled_codex === true,
+          })),
+          worker_bindings: Array.isArray(payload.worker_bindings) ? payload.worker_bindings : [],
         };
         this.dispatchSettingsMeta = {
           path: payload.path || '',
           writable: !!payload.writable,
-          restart_required: payload.restart_required !== false,
+          restart_required: payload.restart_required === true,
+          source_path: payload.mode_info?.source_path || '',
+          compiled_path: payload.mode_info?.compiled_path || payload.path || '',
+          hot_reload_enabled: payload.mode_info?.hot_reload_enabled !== false,
+          compiled_updated_at: payload.mode_info?.compiled_updated_at || '',
+          last_validation_error: payload.mode_info?.last_validation_error || '',
         };
       } catch(e) {
         this.dispatchLoadError = e.message;
@@ -2053,6 +2694,10 @@ function cairnApp() {
       if (!['file', 'ui'].includes(mode) || this.dispatchSettingsMode === mode) return;
       this.dispatchSettingsMode = mode;
       await this.loadDispatchSettings();
+    },
+
+    openSettingsSection(section) {
+      this.settingsSection = section;
     },
 
     normalizeDispatchTasks(tasks) {
@@ -2073,6 +2718,15 @@ function cairnApp() {
           conclude_timeout: Number(source.explore?.conclude_timeout || 90),
         },
       };
+    },
+
+    sanitizeExtraEnv(env) {
+      const internalKeys = new Set(['CAIRN_PROVIDER_SPEC', 'CAIRN_MCP_SERVERS', 'CAIRN_SKILLS']);
+      return Object.fromEntries(
+        Object.entries(env || {})
+          .filter(([key]) => key && !internalKeys.has(String(key)))
+          .map(([key, value]) => [String(key), String(value ?? '')])
+      );
     },
 
     serializeDispatchTasks(tasks) {
@@ -2104,17 +2758,79 @@ function cairnApp() {
         task_types: ['bootstrap', 'reason', 'explore'],
         max_running: 1,
         priority: 0,
+        provider_id: '',
+        provider_supported: true,
         model: '',
         base_url: '',
         auth_token: '',
         has_auth_token: false,
         provider_api: '',
         context_window: null,
+        extra_env: {},
+        mcp_server_ids: [],
+        skill_ids: [],
+        mcp_supported: true,
+        skill_supported: true,
+        show_legacy_provider: false,
+      };
+    },
+
+    blankProvider() {
+      return {
+        id: `provider_${this.dispatchForm.providers.length + 1}`,
+        name: '',
+        enabled: true,
+        kind: 'codex',
+        model: '',
+        base_url: '',
+        auth_token: '',
+        has_auth_token: false,
+        provider_api: '',
+        context_window: null,
+        extra_env: {},
+      };
+    },
+
+    blankMcpServer() {
+      return {
+        id: `mcp_${this.dispatchForm.mcp_servers.length + 1}`,
+        name: '',
+        enabled: true,
+        transport: 'stdio',
+        command: '',
+        url: '',
+        args: [],
+        env: {},
+      };
+    },
+
+    blankSkill() {
+      return {
+        id: `skill_${this.dispatchForm.skills.length + 1}`,
+        name: '',
+        enabled: true,
+        path: '',
+        description: '',
+        enabled_claude: false,
+        enabled_codex: false,
       };
     },
 
     addDispatchWorker() {
       this.dispatchForm.workers.push(this.blankDispatchWorker());
+    },
+
+    addProvider() {
+      this.dispatchForm.providers.push(this.blankProvider());
+    },
+
+    removeProvider(index) {
+      const removed = this.dispatchForm.providers[index];
+      this.dispatchForm.providers.splice(index, 1);
+      if (!removed?.id) return;
+      for (const worker of this.dispatchForm.workers) {
+        if (worker.provider_id === removed.id) worker.provider_id = '';
+      }
     },
 
     removeDispatchWorker(index) {
@@ -2126,6 +2842,10 @@ function cairnApp() {
     },
 
     onDispatchWorkerTypeChange(worker) {
+      if (worker.provider_id) {
+        const provider = (this.dispatchForm.providers || []).find((item) => item.id === worker.provider_id);
+        if (provider && provider.kind !== worker.type) worker.provider_id = '';
+      }
       if (worker.type !== 'pi') {
         worker.provider_api = '';
         worker.context_window = null;
@@ -2137,6 +2857,25 @@ function cairnApp() {
         worker.base_url = '';
         worker.auth_token = '';
       }
+      worker.provider_supported = worker.type !== 'mock';
+      worker.mcp_supported = ['claudecode', 'codex'].includes(worker.type);
+      worker.skill_supported = ['claudecode', 'codex'].includes(worker.type);
+      if (!worker.mcp_supported) worker.mcp_server_ids = [];
+      if (!worker.skill_supported) worker.skill_ids = [];
+    },
+
+    onProviderKindChange(provider) {
+      if (provider.kind !== 'pi') {
+        provider.provider_api = '';
+        provider.context_window = null;
+      } else if (!provider.provider_api) {
+        provider.provider_api = 'openai-completions';
+      }
+    },
+
+    selectedProviderForWorker(worker) {
+      if (!worker?.provider_id) return null;
+      return (this.dispatchForm.providers || []).find((provider) => provider.id === worker.provider_id) || null;
     },
 
     toggleDispatchWorkerTask(worker, taskType) {
@@ -2148,6 +2887,43 @@ function cairnApp() {
         next.add(taskType);
       }
       worker.task_types = ['bootstrap', 'reason', 'explore'].filter((item) => next.has(item));
+    },
+
+    workerExtraEnvEntries(worker) {
+      return Object.entries(this.sanitizeExtraEnv(worker.extra_env || {})).map(([key, value]) => ({ key, value }));
+    },
+
+    addWorkerExtraEnv(worker) {
+      const env = { ...(worker.extra_env || {}) };
+      let index = 1;
+      let candidate = `EXTRA_ENV_${index}`;
+      while (Object.prototype.hasOwnProperty.call(env, candidate)) {
+        index += 1;
+        candidate = `EXTRA_ENV_${index}`;
+      }
+      env[candidate] = '';
+      worker.extra_env = env;
+    },
+
+    updateWorkerExtraEnvKey(worker, oldKey, nextKey) {
+      const trimmed = String(nextKey || '').trim();
+      const env = { ...(worker.extra_env || {}) };
+      const value = env[oldKey] || '';
+      delete env[oldKey];
+      if (trimmed) env[trimmed] = value;
+      worker.extra_env = env;
+    },
+
+    updateWorkerExtraEnvValue(worker, key, nextValue) {
+      const env = { ...(worker.extra_env || {}) };
+      env[key] = String(nextValue ?? '');
+      worker.extra_env = env;
+    },
+
+    removeWorkerExtraEnv(worker, key) {
+      const env = { ...(worker.extra_env || {}) };
+      delete env[key];
+      worker.extra_env = env;
     },
 
     dispatchWorkerTypeClass(type) {
@@ -2174,6 +2950,331 @@ function cairnApp() {
         .join(' · ');
     },
 
+    enabledProviderCount() {
+      return (this.dispatchForm?.providers || []).filter((provider) => provider.enabled !== false).length;
+    },
+
+    enabledMcpCount() {
+      return (this.dispatchForm?.mcp_servers || []).filter((server) => server.enabled !== false).length;
+    },
+
+    enabledSkillCount() {
+      return (this.dispatchForm?.skills || []).filter((skill) => skill.enabled !== false).length;
+    },
+
+    providerWorkerCount(providerId) {
+      if (!providerId) return 0;
+      return (this.dispatchForm?.workers || []).filter((worker) => worker.provider_id === providerId).length;
+    },
+
+    findMcpServer(serverId) {
+      return (this.dispatchForm?.mcp_servers || []).find((server) => server.id === serverId) || null;
+    },
+
+    findSkill(skillId) {
+      return (this.dispatchForm?.skills || []).find((skill) => skill.id === skillId) || null;
+    },
+
+    resourceBadgeClass(enabled) {
+      return enabled
+        ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+        : 'border-slate-200 bg-slate-100 text-slate-500';
+    },
+
+    workersUsingMcp(serverId) {
+      return (this.dispatchForm?.workers || []).filter((worker) => (worker.mcp_server_ids || []).includes(serverId));
+    },
+
+    mcpWorkerCount(serverId) {
+      return this.workersUsingMcp(serverId).length;
+    },
+
+    workersUsingSkill(skillId) {
+      return (this.dispatchForm?.workers || []).filter((worker) => (worker.skill_ids || []).includes(skillId));
+    },
+
+    skillWorkerCount(skillId) {
+      return this.workersUsingSkill(skillId).length;
+    },
+
+    skillPathExists(path) {
+      const value = String(path || '').trim();
+      if (!value) return false;
+      if (value.startsWith('~') || value.startsWith('$')) return true;
+      return true;
+    },
+
+    existingSkillPathCount() {
+      return (this.dispatchForm?.skills || []).filter((skill) => this.skillPathExists(skill.path)).length;
+    },
+
+    boundSkillCount() {
+      return (this.dispatchForm?.skills || []).filter((skill) => this.skillWorkerCount(skill.id) > 0).length;
+    },
+
+    mcpAppSummaryCards() {
+      const workers = this.dispatchForm?.workers || [];
+      const codexWorkers = workers.filter((worker) => worker.type === 'codex' && (worker.mcp_server_ids || []).length > 0).length;
+      const claudeWorkers = workers.filter((worker) => worker.type === 'claudecode' && (worker.mcp_server_ids || []).length > 0).length;
+      const disabled = (this.dispatchForm?.mcp_servers || []).filter((server) => server.enabled === false).length;
+      const unbound = (this.dispatchForm?.mcp_servers || []).filter((server) => this.mcpWorkerCount(server.id) === 0).length;
+      return [
+        { key: 'codex', label: 'Codex', count: codexWorkers, detail: '启用了 MCP 的 Codex Worker' },
+        { key: 'claude', label: 'Claude Code', count: claudeWorkers, detail: '启用了 MCP 的 Claude Worker' },
+        { key: 'disabled', label: '未启用', count: disabled, detail: '已注册但关闭的 MCP' },
+        { key: 'unbound', label: '未绑定', count: unbound, detail: '还没有 Worker 使用它' },
+      ];
+    },
+
+    splitArgsInput(value) {
+      return String(value || '')
+        .split(/\s+/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+    },
+
+    skillWorkersByType(type) {
+      return (this.dispatchForm?.workers || []).filter((worker) => worker.type === type && (worker.skill_ids || []).length > 0).length;
+    },
+
+    availableSkillAppDescriptors() {
+      const seen = new Set();
+      const descriptors = [];
+      for (const worker of (this.dispatchForm?.workers || [])) {
+        if (!worker?.type || seen.has(worker.type) || !['claudecode', 'codex', 'pi', 'mock'].includes(worker.type)) continue;
+        seen.add(worker.type);
+        if (worker.type === 'claudecode') {
+          descriptors.push({
+            key: 'claude',
+            label: 'Claude',
+            workerType: 'claudecode',
+            iconSrc: '/static/vendor/ccswitch-icons/claude.svg',
+            chipClass: 'bg-orange-50 text-orange-700 border border-orange-200',
+            badgeClass: 'bg-orange-50 text-orange-700 ring-1 ring-orange-200',
+          });
+          continue;
+        }
+        if (worker.type === 'codex') {
+          descriptors.push({
+            key: 'codex',
+            label: 'Codex',
+            workerType: 'codex',
+            iconSrc: '/static/vendor/ccswitch-icons/chatgpt.svg',
+            chipClass: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+            badgeClass: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
+          });
+          continue;
+        }
+        if (worker.type === 'pi') {
+          descriptors.push({
+            key: 'pi',
+            label: 'Pi',
+            workerType: 'pi',
+            chipClass: 'bg-amber-50 text-amber-700 border border-amber-200',
+            badgeClass: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200',
+          });
+          continue;
+        }
+        if (worker.type === 'mock') {
+          descriptors.push({
+            key: 'mock',
+            label: 'Mock',
+            workerType: 'mock',
+            chipClass: 'bg-slate-100 text-slate-700 border border-slate-200',
+            badgeClass: 'bg-slate-100 text-slate-700 ring-1 ring-slate-200',
+          });
+        }
+      }
+      if (!descriptors.length) {
+        descriptors.push({
+          key: 'codex',
+          label: 'Codex',
+          workerType: 'codex',
+          iconSrc: '/static/vendor/ccswitch-icons/chatgpt.svg',
+          chipClass: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+          badgeClass: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
+        });
+      }
+      return descriptors;
+    },
+
+    skillTypeCountForCard(skillId, type) {
+      return (this.dispatchForm?.workers || []).filter((worker) => worker.type === type && (worker.skill_ids || []).includes(skillId)).length;
+    },
+
+    skillAppEnabled(skill, appKey) {
+      if (!skill) return false;
+      if (appKey === 'claude') return skill.enabled_claude === true;
+      if (appKey === 'codex') return skill.enabled_codex === true;
+      return false;
+    },
+
+    toggleSkillApp(skill, appKey) {
+      if (!skill) return;
+      if (appKey === 'claude') {
+        skill.enabled_claude = !(skill.enabled_claude === true);
+        return;
+      }
+      if (appKey === 'codex') {
+        skill.enabled_codex = !(skill.enabled_codex === true);
+      }
+    },
+
+    skillAppCountChips() {
+      return this.availableSkillAppDescriptors().map((item) => ({
+        ...item,
+        count: this.skillWorkersByType(item.workerType),
+        className: item.chipClass,
+      }));
+    },
+
+    async syncDispatchResources() {
+      await this.loadDispatchSettings();
+      this.showToast('资源已重新加载');
+    },
+
+    mergeDiscoveredSkills(discovered) {
+      const existingById = new Map((this.dispatchForm.skills || []).map((skill) => [skill.id, skill]));
+      const existingPaths = new Set((this.dispatchForm.skills || []).map((skill) => String(skill.path || '').trim()).filter(Boolean));
+      let imported = 0;
+      for (const item of discovered || []) {
+        const path = String(item.path || '').trim();
+        const id = String(item.id || '').trim();
+        if (!path || !id) continue;
+        if (existingById.has(id) || existingPaths.has(path)) continue;
+        this.dispatchForm.skills.push({
+          id,
+          name: item.name || id,
+          enabled: true,
+          path,
+          description: item.description || '',
+          enabled_claude: false,
+          enabled_codex: false,
+        });
+        existingById.set(id, true);
+        existingPaths.add(path);
+        imported += 1;
+      }
+      return imported;
+    },
+
+    async discoverSkills() {
+      try {
+        const query = this.dispatchSettingsMode ? `?mode=${encodeURIComponent(this.dispatchSettingsMode)}` : '';
+        const discovered = await this.api('GET', `/settings/dispatch/skills/discover${query}`);
+        this.discoveredSkills = Array.isArray(discovered) ? discovered : [];
+        if (!this.discoveredSkills.length) {
+          this.showToast('没有发现项目内可挂载给容器 agent 的 Skill');
+          return;
+        }
+        this.showToast(`发现 ${this.discoveredSkills.length} 个容器 Skill`);
+      } catch (e) {
+        this.showToast(e.message, 'error');
+      }
+    },
+
+    async importExistingSkills() {
+      try {
+        const query = this.dispatchSettingsMode ? `?mode=${encodeURIComponent(this.dispatchSettingsMode)}` : '';
+        const discovered = await this.api('GET', `/settings/dispatch/skills/discover${query}`);
+        this.discoveredSkills = Array.isArray(discovered) ? discovered : [];
+        const imported = this.mergeDiscoveredSkills(this.discoveredSkills);
+        if (!this.discoveredSkills.length) {
+          this.showToast('没有发现项目内可挂载给容器 agent 的 Skill');
+          return;
+        }
+        if (!imported) {
+          this.showToast('发现到的容器 Skill 已全部在当前配置中');
+          return;
+        }
+        this.showToast(`已导入 ${imported} 个容器 Skill，请记得保存配置`);
+      } catch (e) {
+        this.showToast(e.message, 'error');
+      }
+    },
+
+    workerBindingSummary(worker) {
+      const provider = this.selectedProviderForWorker(worker);
+      const providerLabel = provider ? (provider.name || provider.id) : '';
+      const enabledMcpIds = new Set(
+        (this.dispatchForm?.mcp_servers || [])
+          .filter((server) => server.enabled !== false)
+          .map((server) => server.id)
+      );
+      const enabledSkillIds = new Set(
+        (this.dispatchForm?.skills || [])
+          .filter((skill) => skill.enabled !== false)
+          .map((skill) => skill.id)
+      );
+      const selectedMcpIds = Array.isArray(worker?.mcp_server_ids) ? worker.mcp_server_ids : [];
+      const selectedSkillIds = Array.isArray(worker?.skill_ids) ? worker.skill_ids : [];
+      const activeMcpCount = selectedMcpIds.filter((id) => enabledMcpIds.has(id)).length;
+      const activeSkillCount = selectedSkillIds.filter((id) => enabledSkillIds.has(id)).length;
+
+      return {
+        provider: provider ? '已绑定 Provider' : '未绑定 Provider',
+        providerDetail: provider
+          ? `${providerLabel}${provider.enabled === false ? '（当前已禁用）' : ''}`
+          : (worker?.type === 'mock' ? 'Mock 不需要 Provider' : '回退到 Worker 兼容字段'),
+        mcp: worker?.mcp_supported ? `${selectedMcpIds.length} 个已选` : '当前未接入',
+        mcpDetail: worker?.mcp_supported
+          ? (selectedMcpIds.length
+              ? `${activeMcpCount} 个启用，${Math.max(selectedMcpIds.length - activeMcpCount, 0)} 个未启用`
+              : '还没有绑定 MCP')
+          : (worker?.type === 'pi' ? 'Pi 暂时只保留展示入口' : '当前类型未实现 MCP 注入'),
+        skill: worker?.skill_supported ? `${selectedSkillIds.length} 个已选` : '当前未接入',
+        skillDetail: worker?.skill_supported
+          ? (selectedSkillIds.length
+              ? `${activeSkillCount} 个启用，${Math.max(selectedSkillIds.length - activeSkillCount, 0)} 个未启用`
+              : '还没有绑定 Skill')
+          : (worker?.type === 'pi' ? 'Pi 先标记为预留态' : '当前类型暂未接入 Skill 同步'),
+      };
+    },
+
+    addMcpServer() {
+      this.dispatchForm.mcp_servers.push(this.blankMcpServer());
+    },
+
+    removeMcpServer(index) {
+      const removed = this.dispatchForm.mcp_servers[index];
+      this.dispatchForm.mcp_servers.splice(index, 1);
+      if (!removed?.id) return;
+      for (const worker of this.dispatchForm.workers) {
+        worker.mcp_server_ids = (worker.mcp_server_ids || []).filter((id) => id !== removed.id);
+      }
+    },
+
+    addSkill() {
+      this.dispatchForm.skills.push(this.blankSkill());
+    },
+
+    removeSkill(index) {
+      const removed = this.dispatchForm.skills[index];
+      this.dispatchForm.skills.splice(index, 1);
+      if (!removed?.id) return;
+      for (const worker of this.dispatchForm.workers) {
+        worker.skill_ids = (worker.skill_ids || []).filter((id) => id !== removed.id);
+      }
+    },
+
+    toggleWorkerMcp(worker, serverId) {
+      const next = new Set(worker.mcp_server_ids || []);
+      if (next.has(serverId)) next.delete(serverId);
+      else next.add(serverId);
+      worker.mcp_server_ids = this.dispatchForm.mcp_servers
+        .map((server) => server.id)
+        .filter((id) => next.has(id));
+    },
+
+    toggleWorkerSkill(worker, skillId) {
+      const next = new Set(worker.skill_ids || []);
+      if (next.has(skillId)) next.delete(skillId);
+      else next.add(skillId);
+      worker.skill_ids = this.dispatchForm.skills
+        .map((skill) => skill.id)
+        .filter((id) => next.has(id));
+    },
+
     totalWorkingIntents() {
       return this.projects.reduce((total, project) => total + (project.working_intent_count || 0), 0);
     },
@@ -2185,6 +3286,19 @@ function cairnApp() {
           mode: this.dispatchSettingsMode,
           runtime: { ...this.dispatchForm.runtime },
           tasks: this.serializeDispatchTasks(this.dispatchForm.tasks),
+          providers: this.dispatchForm.providers.map((provider) => ({
+            id: provider.id || '',
+            name: provider.name || '',
+            enabled: provider.enabled !== false,
+            kind: provider.kind,
+            model: provider.model || '',
+            base_url: provider.base_url || '',
+            auth_token: provider.auth_token || '',
+            has_auth_token: !!provider.has_auth_token,
+            provider_api: provider.provider_api || '',
+            context_window: provider.context_window === '' || provider.context_window == null ? null : Number(provider.context_window),
+            extra_env: this.sanitizeExtraEnv(provider.extra_env || {}),
+          })),
           workers: this.dispatchForm.workers.map((worker) => ({
             source_name: worker.source_name || '',
             name: worker.name || '',
@@ -2193,12 +3307,43 @@ function cairnApp() {
             task_types: worker.task_types || [],
             max_running: Number(worker.max_running),
             priority: Number(worker.priority),
+            provider_id: worker.provider_id || '',
+            provider_supported: worker.provider_supported !== false,
             model: worker.model || '',
             base_url: worker.base_url || '',
             auth_token: worker.auth_token || '',
             has_auth_token: !!worker.has_auth_token,
             provider_api: worker.provider_api || '',
             context_window: worker.context_window === '' || worker.context_window == null ? null : Number(worker.context_window),
+            extra_env: this.sanitizeExtraEnv(worker.extra_env || {}),
+            mcp_server_ids: Array.isArray(worker.mcp_server_ids) ? [...worker.mcp_server_ids] : [],
+            skill_ids: Array.isArray(worker.skill_ids) ? [...worker.skill_ids] : [],
+            mcp_supported: worker.mcp_supported !== false,
+            skill_supported: worker.skill_supported === true,
+          })),
+          mcp_servers: this.dispatchForm.mcp_servers.map((server) => ({
+            id: server.id || '',
+            name: server.name || '',
+            enabled: server.enabled !== false,
+            transport: server.transport,
+            command: server.command || '',
+            url: server.url || '',
+            args: Array.isArray(server.args) ? [...server.args] : [],
+            env: server.env || {},
+          })),
+          skills: this.dispatchForm.skills.map((skill) => ({
+            id: skill.id || '',
+            name: skill.name || '',
+            enabled: skill.enabled !== false,
+            path: skill.path || '',
+            description: skill.description || '',
+            enabled_claude: skill.enabled_claude === true,
+            enabled_codex: skill.enabled_codex === true,
+          })),
+          worker_bindings: this.dispatchForm.workers.map((worker) => ({
+            worker_name: worker.name || '',
+            mcp_server_ids: Array.isArray(worker.mcp_server_ids) ? [...worker.mcp_server_ids] : [],
+            skill_ids: Array.isArray(worker.skill_ids) ? [...worker.skill_ids] : [],
           })),
         };
         const saved = await this.api('PUT', '/settings/dispatch', payload);
@@ -2206,6 +3351,19 @@ function cairnApp() {
         this.dispatchForm = {
           runtime: { ...saved.runtime },
           tasks: this.normalizeDispatchTasks(saved.tasks),
+          providers: (saved.providers || []).map((provider) => ({
+            id: provider.id || '',
+            name: provider.name || '',
+            enabled: provider.enabled !== false,
+            kind: provider.kind || 'codex',
+            model: provider.model || '',
+            base_url: provider.base_url || '',
+            auth_token: '',
+            has_auth_token: !!provider.has_auth_token,
+            provider_api: provider.provider_api || '',
+            context_window: provider.context_window ?? null,
+            extra_env: this.sanitizeExtraEnv(provider.extra_env || {}),
+          })),
           workers: (saved.workers || []).map((worker) => ({
             source_name: worker.source_name || worker.name || '',
             name: worker.name || '',
@@ -2214,18 +3372,51 @@ function cairnApp() {
             task_types: Array.isArray(worker.task_types) ? [...worker.task_types] : ['bootstrap', 'reason', 'explore'],
             max_running: worker.max_running || 1,
             priority: worker.priority || 0,
+            provider_id: worker.provider_id || '',
+            provider_supported: worker.provider_supported !== false,
             model: worker.model || '',
             base_url: worker.base_url || '',
             auth_token: '',
             has_auth_token: !!worker.has_auth_token,
             provider_api: worker.provider_api || '',
             context_window: worker.context_window ?? null,
+            extra_env: this.sanitizeExtraEnv(worker.extra_env || {}),
+            mcp_server_ids: Array.isArray(worker.mcp_server_ids) ? [...worker.mcp_server_ids] : [],
+            skill_ids: Array.isArray(worker.skill_ids) ? [...worker.skill_ids] : [],
+            mcp_supported: worker.mcp_supported !== false,
+            skill_supported: worker.skill_supported === true,
+            show_legacy_provider: false,
           })),
+          mcp_servers: (saved.mcp_servers || []).map((server) => ({
+            id: server.id || '',
+            name: server.name || '',
+            enabled: server.enabled !== false,
+            transport: server.transport || 'stdio',
+            command: server.command || '',
+            url: server.url || '',
+            args: Array.isArray(server.args) ? [...server.args] : [],
+            env: server.env || {},
+          })),
+          skills: (saved.skills || []).map((skill) => ({
+            id: skill.id || '',
+            name: skill.name || '',
+            enabled: skill.enabled !== false,
+            path: skill.path || '',
+            description: skill.description || '',
+            enabled_claude: skill.enabled_claude === true,
+            enabled_codex: skill.enabled_codex === true,
+          })),
+          worker_bindings: Array.isArray(saved.worker_bindings) ? saved.worker_bindings : [],
         };
         this.dispatchSettingsMeta = {
           path: saved.path || '',
           writable: !!saved.writable,
-          restart_required: saved.restart_required !== false,
+          restart_required: saved.restart_required === true,
+          source_path: saved.mode_info?.source_path || '',
+          compiled_path: saved.mode_info?.compiled_path || saved.path || '',
+          hot_reload_enabled: saved.mode_info?.hot_reload_enabled !== false,
+          compiled_updated_at: saved.mode_info?.compiled_updated_at || '',
+          last_validation_error: saved.mode_info?.last_validation_error || '',
         };
         this.showToast('调度器配置已保存，dispatcher 会自动热加载');
       } catch(e) {
@@ -3900,6 +5091,13 @@ function cairnApp() {
 
     formatTime(ts) { if (!ts) return ''; return new Date(ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}); },
     formatDate(ts) { if (!ts) return ''; const d = new Date(ts); return d.toLocaleDateString([],{year:'numeric',month:'short',day:'numeric'}) + ' ' + d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); },
+    formatDateTime(ts) {
+      if (!ts) return '';
+      const d = new Date(ts);
+      if (Number.isNaN(d.getTime())) return String(ts);
+      return d.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' }) + ' ' +
+        d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    },
     formatTimelineDate(ts) { if (!ts) return ''; return new Date(ts).toLocaleDateString([],{year:'numeric',month:'short',day:'numeric'}); },
     formatDurationMs(ms) {
       const totalSeconds = Math.max(0, Math.round(ms / 1000));

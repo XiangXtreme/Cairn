@@ -254,8 +254,6 @@ class DispatchConfig(BaseModel):
         names = [worker.name for worker in self.workers]
         if len(set(names)) != len(names):
             raise ValueError("worker names must be unique")
-        if not any(worker.enabled for worker in self.workers):
-            raise ValueError("at least one worker must be enabled")
         if self.runtime.max_project_workers > self.runtime.max_workers:
             raise ValueError("max_project_workers cannot exceed max_workers")
         if self.execution.backend == "docker" and self.container is None:
