@@ -56,6 +56,9 @@ class WorkerRunRecord:
     cancelled: bool = False
     cancel_reason: str | None = None
     duration_ms: int | None = None
+    skill_ids: list[str] | None = None
+    skill_names: list[str] | None = None
+    skill_source_paths: list[str] | None = None
     stdout_preview: str = ""
     stderr_preview: str = ""
 
@@ -83,6 +86,7 @@ def start_worker_run_record(
     session_id: str | None,
 ) -> WorkerRunRecord:
     started_at = now_utc_iso()
+    skill_ids, skill_names, skill_source_paths = extract_worker_skills(worker)
     record = WorkerRunRecord(
         run_id=uuid.uuid4().hex,
         project_id=project_id,
@@ -96,6 +100,9 @@ def start_worker_run_record(
         status="running",
         started_at=started_at,
         updated_at=started_at,
+        skill_ids=skill_ids,
+        skill_names=skill_names,
+        skill_source_paths=skill_source_paths,
     )
     write_worker_run_record(runtime_manager, record)
     return record
@@ -176,6 +183,9 @@ def write_worker_run_record(runtime_manager: RuntimeManager, record: WorkerRunRe
         "cancelled": record.cancelled,
         "cancel_reason": record.cancel_reason,
         "duration_ms": record.duration_ms,
+        "skill_ids": record.skill_ids or [],
+        "skill_names": record.skill_names or [],
+        "skill_source_paths": record.skill_source_paths or [],
         "stdout_preview": record.stdout_preview,
         "stderr_preview": record.stderr_preview,
     }
@@ -211,6 +221,39 @@ def mark_stale_worker_run_records(work_dir: Path) -> int:
 
 def did_timeout(result: ProcessResult) -> bool:
     return not result.cancelled and (result.timed_out or result.returncode in (124, 137))
+
+
+def extract_worker_skills(worker: WorkerConfig) -> tuple[list[str], list[str], list[str]]:
+    raw = worker.env.get("CAIRN_SKILLS")
+    if raw is None or not str(raw).strip():
+        return [], [], []
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return [], [], []
+    if not isinstance(payload, list):
+        return [], [], []
+
+    skill_ids: list[str] = []
+    skill_names: list[str] = []
+    skill_source_paths: list[str] = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        skill_id = str(item.get("id", "")).strip()
+        skill_name = str(item.get("name", "")).strip()
+        source_path = str(
+            item.get("source_path") or item.get("original_path") or item.get("path") or ""
+        ).strip()
+        if skill_id:
+            skill_ids.append(skill_id)
+        if skill_name:
+            skill_names.append(skill_name)
+        elif skill_id:
+            skill_names.append(skill_id)
+        if source_path:
+            skill_source_paths.append(source_path)
+    return skill_ids, skill_names, skill_source_paths
 
 
 def cancel_reason(result: ProcessResult, cancellation: TaskCancellation | None = None) -> str | None:

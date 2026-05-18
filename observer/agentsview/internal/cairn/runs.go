@@ -33,6 +33,9 @@ type Run struct {
 	Cancelled     bool    `json:"cancelled"`
 	CancelReason  *string `json:"cancel_reason,omitempty"`
 	DurationMS    *int    `json:"duration_ms,omitempty"`
+	SkillIDs      []string `json:"skill_ids,omitempty"`
+	SkillNames    []string `json:"skill_names,omitempty"`
+	SkillSourcePaths []string `json:"skill_source_paths,omitempty"`
 	StdoutPreview string  `json:"stdout_preview"`
 	StderrPreview string  `json:"stderr_preview"`
 	SourcePath    string  `json:"source_path"`

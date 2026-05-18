@@ -17,6 +17,7 @@ from cairn.dispatcher.runtime.heartbeat import HeartbeatLease
 from cairn.dispatcher.tasks.common import (
     best_effort_release,
     cancel_reason,
+    extract_worker_skills,
     did_timeout,
     finish_worker_run_record,
     make_run_record_output_callback,
@@ -52,11 +53,12 @@ def run_bootstrap_task(
         workspace_name = runtime_manager.ensure_running(project.project.id)
 
         LOG.info(
-            "starting worker process project=%s intent=%s worker=%s phase=bootstrap_healthcheck timeout=%ss",
+            "starting worker process project=%s intent=%s worker=%s phase=bootstrap_healthcheck timeout=%ss skills=%s",
             project.project.id,
             intent.id,
             worker.name,
             healthcheck_timeout,
+            ",".join(extract_worker_skills(worker)[0]) or "-",
         )
         healthcheck = run_healthcheck(
             runtime_manager,

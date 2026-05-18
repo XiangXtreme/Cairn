@@ -1,13 +1,26 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from cairn.dispatcher.config import WorkerConfig
 from cairn.dispatcher.runtime.local import LocalRuntimeManager
 from cairn.dispatcher.config import ExecutionConfig
 from cairn.dispatcher.workers.adapters.codex import CodexDriver
 from cairn.dispatcher.workers.runtime_injection import prepare_worker_runtime_files
+
+
+class DockerLikeRuntime(LocalRuntimeManager):
+    def __init__(self, config: ExecutionConfig):
+        super().__init__(config)
+        self.shared_root = self._root / "shared-session-home"
+
+    def workspace_path(self, workspace_name: str) -> PurePosixPath:
+        return PurePosixPath("/tmp/cairn-workspaces") / workspace_name
+
+    def link_or_copy_directory(self, workspace_name: str, relative_path: str, target_path: str) -> str:
+        mapped = self.shared_root / target_path.lstrip("/")
+        return super().link_or_copy_directory(workspace_name, relative_path, str(mapped))
 
 
 def test_codex_runtime_injection_creates_dedicated_codex_home(tmp_path: Path) -> None:
@@ -109,6 +122,9 @@ def test_claudecode_runtime_injection_creates_claude_home_files(tmp_path: Path) 
     assert '"fetch"' in claude_text
     assert '"command": "uvx"' in claude_text
     assert env_updates["CLAUDE_CONFIG_DIR"].endswith("/.cairn/claude-home/claude_main")
+    assert not (claude_home / "projects").exists()
+    assert not (claude_home / "sessions").exists()
+    assert not (claude_home / "backups").exists()
 
 
 def test_runtime_injection_materializes_project_skill_directories(tmp_path: Path) -> None:
@@ -199,3 +215,32 @@ def test_claude_runtime_injection_materializes_skill_directories(tmp_path: Path)
     assert (claude_skill_dir / "SKILL.md").exists()
     assert agents_skill_dir.exists()
     assert (agents_skill_dir / "SKILL.md").exists()
+
+
+def test_claudecode_runtime_injection_links_shared_session_dirs_for_docker_runtime(tmp_path: Path) -> None:
+    worker = WorkerConfig(
+        name="claude_main",
+        type="claudecode",
+        enabled=True,
+        task_types=["reason"],
+        max_running=1,
+        priority=0,
+        env={
+            "ANTHROPIC_MODEL": "claude-sonnet-4-20250514",
+            "ANTHROPIC_BASE_URL": "https://anthropic.example.test",
+            "ANTHROPIC_AUTH_TOKEN": "sk-test",
+        },
+    )
+    runtime = DockerLikeRuntime(ExecutionConfig(backend="local", work_dir=tmp_path / "runtime-docker-like"))
+    workspace_name = runtime.ensure_running("proj_claude_shared")
+
+    env_updates = prepare_worker_runtime_files(runtime, workspace_name, worker)
+
+    claude_home = tmp_path / "runtime-docker-like/projects/proj_claude_shared/.cairn/claude-home/claude_main"
+    assert env_updates["HOME"] == "/tmp/cairn-workspaces/proj_claude_shared/.cairn/claude-home/claude_main"
+    assert (claude_home / "projects").is_symlink()
+    assert (claude_home / "projects").resolve() == runtime.shared_root / "cairn-observer-sessions/.claude/projects"
+    assert (claude_home / "sessions").is_symlink()
+    assert (claude_home / "sessions").resolve() == runtime.shared_root / "cairn-observer-sessions/.claude/sessions"
+    assert (claude_home / "backups").is_symlink()
+    assert (claude_home / "backups").resolve() == runtime.shared_root / "cairn-observer-sessions/.claude/backups"

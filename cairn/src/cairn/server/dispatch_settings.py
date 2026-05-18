@@ -345,9 +345,25 @@ def import_skill_zip(body: SkillZipImportRequest) -> SkillZipImportResponse:
             raise HTTPException(400, f"Unable to read imported SKILL.md: {exc}") from exc
 
         skill_name = _extract_skill_name(skill_dir, text)
-        skill_id = _slugify_skill_id(skill_dir.name or skill_name)
+        skill_id = _resolve_skill_id(
+            skill_dir,
+            name=skill_name,
+            fallback=Path(filename).stem,
+        )
         target_dir = registry_root / skill_id
         _sync_skill_dir(skill_dir, target_dir)
+        _cleanup_legacy_imported_skill_dirs(
+            registry_root,
+            target_dir,
+            skill_name=skill_name,
+            skill_text=text,
+        )
+        if resolved_mode == "ui":
+            _rewrite_ui_bundle_skill_aliases(
+                old_skill_name=skill_name,
+                new_skill_id=skill_id,
+                new_skill_path=str(target_dir),
+            )
 
     discovered = discover_skills(body.mode)
     return SkillZipImportResponse(
@@ -630,6 +646,67 @@ def _read_ui_bundle() -> dict[str, Any]:
         "skills": [SkillSettings.model_validate(item) for item in skills_raw],
         "worker_bindings": [WorkerBindingSettings.model_validate(item) for item in bindings_raw],
     }
+
+
+def _rewrite_ui_bundle_skill_aliases(*, old_skill_name: str, new_skill_id: str, new_skill_path: str) -> None:
+    root = resolve_ui_dispatch_root_path()
+    skills_raw = _read_json(root / _SKILLS_FILENAME, default=[])
+    changed = False
+    updated: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+
+    for item in skills_raw:
+        if not isinstance(item, dict):
+            continue
+        payload = dict(item)
+        item_name = str(payload.get("name", "")).strip()
+        item_id = str(payload.get("id", "")).strip()
+        item_path = str(payload.get("path", "")).strip()
+        if item_name == old_skill_name and (item_id != new_skill_id or item_path != new_skill_path):
+            payload["id"] = new_skill_id
+            payload["path"] = new_skill_path
+            changed = True
+        final_id = str(payload.get("id", "")).strip()
+        if final_id and final_id in seen_ids:
+            changed = True
+            continue
+        if final_id:
+            seen_ids.add(final_id)
+        updated.append(payload)
+
+    if changed:
+        _write_json(root / _SKILLS_FILENAME, updated)
+
+
+def _cleanup_legacy_imported_skill_dirs(
+    registry_root: Path,
+    target_dir: Path,
+    *,
+    skill_name: str,
+    skill_text: str,
+) -> None:
+    target_resolved = target_dir.resolve()
+    for candidate in registry_root.iterdir():
+        if not candidate.is_dir():
+            continue
+        try:
+            if candidate.resolve() == target_resolved:
+                continue
+        except OSError:
+            continue
+        skill_md = candidate / "SKILL.md"
+        if not skill_md.exists():
+            continue
+        try:
+            candidate_text = skill_md.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        candidate_name = _extract_skill_name(candidate, candidate_text)
+        if candidate_name != skill_name:
+            continue
+        if candidate_text != skill_text:
+            continue
+        shutil.rmtree(candidate, ignore_errors=True)
 
 
 def _tasks_to_settings(tasks_raw: dict[str, Any]) -> DispatchTaskSettings:
@@ -943,7 +1020,7 @@ def _build_discovered_skill(skill_dir: Path, registered_ids: set[str]) -> Discov
         return None
     name = _extract_skill_name(skill_dir, text)
     description = _extract_skill_description(text)
-    skill_id = _slugify_skill_id(skill_dir.name or name)
+    skill_id = _resolve_skill_id(skill_dir, name=name)
     return DiscoveredSkill(
         id=skill_id,
         name=name,
@@ -971,6 +1048,14 @@ def _extract_skill_description(text: str) -> str:
             continue
         return stripped[:240]
     return ""
+
+
+def _resolve_skill_id(skill_dir: Path, *, name: str = "", fallback: str = "") -> str:
+    for candidate in (name, skill_dir.name, fallback):
+        skill_id = _slugify_skill_id(candidate)
+        if skill_id != "skill":
+            return skill_id
+    return "skill"
 
 
 def _slugify_skill_id(value: str) -> str:

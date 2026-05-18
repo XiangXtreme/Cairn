@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 from pathlib import Path
 
@@ -443,6 +444,119 @@ def test_discover_skills_syncs_repo_skill_into_registry(tmp_path: Path, monkeypa
     synced = (registry_skill / "SKILL.md").read_text(encoding="utf-8")
     assert "Fresh repo skill." in synced
     assert "Stale registry skill." not in synced
+
+
+def test_import_skill_zip_uses_skill_name_instead_of_unzipped_root(tmp_path: Path, monkeypatch) -> None:
+    db_path = tmp_path / "cairn.db"
+    db._db_path = None
+    db.configure(db_path)
+
+    dispatch_path = tmp_path / "dispatch.yaml"
+    _write_dispatch(dispatch_path)
+
+    monkeypatch.setenv("CAIRN_DISPATCH_CONFIG", str(dispatch_path))
+    monkeypatch.setenv("CAIRN_UI_DISPATCH_CONFIG", str(tmp_path / "datas" / "cairn" / "dispatch_ui.yaml"))
+    monkeypatch.setenv("CAIRN_DISPATCH_SETTINGS_MODE", "ui")
+    monkeypatch.chdir(tmp_path)
+
+    skill_zip = tmp_path / "web-ai-skill.zip"
+    skill_text = (
+        "---\n"
+        "name: Web和AI安全测试专家\n"
+        "description: test skill\n"
+        "---\n\n"
+        "# Web和AI安全测试专家\n\n"
+        "Skill body.\n"
+    )
+    import zipfile
+
+    with zipfile.ZipFile(skill_zip, "w") as archive:
+        archive.writestr("SKILL.md", skill_text)
+
+    client = TestClient(app)
+    response = client.post(
+        "/settings/dispatch/skills/import-zip",
+        json={
+            "mode": "ui",
+            "filename": skill_zip.name,
+            "content_base64": base64.b64encode(skill_zip.read_bytes()).decode("ascii"),
+        },
+    )
+    assert response.status_code == 200, response.text
+
+    imported_dir = Path(response.json()["imported_dir"])
+    assert imported_dir.name == "web-ai"
+    assert imported_dir.joinpath("SKILL.md").exists()
+    assert not imported_dir.name.startswith("unzipped")
+
+
+def test_import_skill_zip_rewrites_legacy_unzipped_skill_record(tmp_path: Path, monkeypatch) -> None:
+    db_path = tmp_path / "cairn.db"
+    db._db_path = None
+    db.configure(db_path)
+
+    dispatch_path = tmp_path / "dispatch.yaml"
+    _write_dispatch(dispatch_path)
+
+    monkeypatch.setenv("CAIRN_DISPATCH_CONFIG", str(dispatch_path))
+    monkeypatch.setenv("CAIRN_UI_DISPATCH_CONFIG", str(tmp_path / "datas" / "cairn" / "dispatch_ui.yaml"))
+    monkeypatch.setenv("CAIRN_DISPATCH_SETTINGS_MODE", "ui")
+    monkeypatch.chdir(tmp_path)
+
+    client = TestClient(app)
+    current = client.get("/settings/dispatch?mode=ui")
+    assert current.status_code == 200
+    payload = current.json()
+    payload["skills"] = [
+        {
+            "id": "unzipped",
+            "name": "Web和AI安全测试专家",
+            "enabled": True,
+            "path": str(tmp_path / "datas" / "cairn" / "registry" / "skills" / "unzipped"),
+            "description": "---",
+            "enabled_claude": True,
+            "enabled_codex": True,
+        }
+    ]
+    saved = client.put("/settings/dispatch", json=payload)
+    assert saved.status_code == 200, saved.text
+
+    legacy_dir = tmp_path / "datas" / "cairn" / "registry" / "skills" / "unzipped"
+    legacy_dir.mkdir(parents=True, exist_ok=True)
+    skill_text = (
+        "---\n"
+        "name: Web和AI安全测试专家\n"
+        "description: test skill\n"
+        "---\n\n"
+        "# Web和AI安全测试专家\n\n"
+        "Skill body.\n"
+    )
+    (legacy_dir / "SKILL.md").write_text(skill_text, encoding="utf-8")
+
+    skill_zip = tmp_path / "web-ai-skill.zip"
+    import zipfile
+
+    with zipfile.ZipFile(skill_zip, "w") as archive:
+        archive.writestr("SKILL.md", skill_text)
+
+    response = client.post(
+        "/settings/dispatch/skills/import-zip",
+        json={
+            "mode": "ui",
+            "filename": skill_zip.name,
+            "content_base64": base64.b64encode(skill_zip.read_bytes()).decode("ascii"),
+        },
+    )
+    assert response.status_code == 200, response.text
+
+    latest = client.get("/settings/dispatch?mode=ui")
+    assert latest.status_code == 200
+    skills = latest.json()["skills"]
+    matching = [item for item in skills if item["name"] == "Web和AI安全测试专家"]
+    assert len(matching) == 1
+    assert matching[0]["id"] == "web-ai"
+    assert matching[0]["path"].endswith("/web-ai")
+    assert not legacy_dir.exists()
 
 
 def test_worker_healthcheck_endpoint_returns_mock_result(tmp_path: Path, monkeypatch) -> None:

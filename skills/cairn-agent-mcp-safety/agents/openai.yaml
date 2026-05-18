@@ -1,0 +1,7 @@
+interface:
+  display_name: "Cairn Agent and MCP Safety"
+  short_description: "Handle Cairn prompt, tool, and MCP safety tasks."
+  default_prompt: "Use $cairn-agent-mcp-safety to assess the next prompt, tool, or MCP validation step for this Cairn task."
+
+policy:
+  allow_implicit_invocation: true

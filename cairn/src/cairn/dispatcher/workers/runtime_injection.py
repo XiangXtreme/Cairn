@@ -270,6 +270,21 @@ def _prepare_claude_home(
         str(PurePath(".cairn") / "claude-home" / worker.name / ".claude" / "settings.json"),
         json.dumps({"skipIntroduction": True}, ensure_ascii=False, indent=2),
     )
+    shared_projects_dir = _claude_shared_dir(runtime_manager, workspace_name, worker, "projects")
+    shared_sessions_dir = _claude_shared_dir(runtime_manager, workspace_name, worker, "sessions")
+    shared_backups_dir = _claude_shared_dir(runtime_manager, workspace_name, worker, "backups")
+    for relative_path, shared_target in (
+        (PurePath(".cairn") / "claude-home" / worker.name / "projects", shared_projects_dir),
+        (PurePath(".cairn") / "claude-home" / worker.name / "sessions", shared_sessions_dir),
+        (PurePath(".cairn") / "claude-home" / worker.name / "backups", shared_backups_dir),
+    ):
+        if not shared_target:
+            continue
+        runtime_manager.link_or_copy_directory(
+            workspace_name,
+            str(relative_path),
+            shared_target,
+        )
     _materialize_app_skill_views(
         runtime_manager,
         workspace_name,
@@ -281,6 +296,16 @@ def _prepare_claude_home(
         ],
     )
     return claude_home
+
+
+def _claude_shared_dir(runtime_manager: RuntimeManager, workspace_name: str, worker: WorkerConfig, leaf: str) -> str:
+    configured = str(worker.env.get("CLAUDE_PROJECTS_DIR", "")).strip()
+    if configured and leaf == "projects":
+        return configured
+    workspace_path = runtime_manager.workspace_path(workspace_name)
+    if isinstance(workspace_path, Path):
+        return ""
+    return f"/cairn-observer-sessions/.claude/{leaf}"
 
 
 def _materialize_app_skill_views(

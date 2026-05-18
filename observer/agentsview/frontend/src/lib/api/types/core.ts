@@ -208,6 +208,9 @@ export interface CairnRun {
   cancelled: boolean;
   cancel_reason?: string | null;
   duration_ms?: number | null;
+  skill_ids?: string[];
+  skill_names?: string[];
+  skill_source_paths?: string[];
   stdout_preview: string;
   stderr_preview: string;
   source_path: string;

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Cairn Web Surface"
+  short_description: "Handle Cairn web and exposed-service attack paths."
+  default_prompt: "Use $cairn-web-surface to choose the next web, HTTP, or exposed-service step for this Cairn task."
+
+policy:
+  allow_implicit_invocation: true

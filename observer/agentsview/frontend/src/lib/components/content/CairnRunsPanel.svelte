@@ -64,6 +64,16 @@
     const lines = text.split(/\r?\n/).filter(Boolean).length;
     return `${stream} · ${lines || 1} line${lines === 1 ? "" : "s"}`;
   }
+
+  function skillList(run: CairnRun): string[] {
+    if (Array.isArray(run.skill_names) && run.skill_names.length > 0) {
+      return run.skill_names;
+    }
+    if (Array.isArray(run.skill_ids) && run.skill_ids.length > 0) {
+      return run.skill_ids;
+    }
+    return [];
+  }
 </script>
 
 {#if configured && (runs.length > 0 || loading || error)}
@@ -104,11 +114,22 @@
               <strong>{run.worker_name}</strong>
               <span>agent</span>
               <strong>{run.agent_type}</strong>
+              {#if skillList(run).length > 0}
+                <span>skills</span>
+                <strong title={skillList(run).join(", ")}>{skillList(run).join(", ")}</strong>
+              {/if}
               {#if run.exit_code !== undefined && run.exit_code !== null}
                 <span>exit</span>
                 <strong>{run.exit_code}</strong>
               {/if}
             </div>
+
+            {#if Array.isArray(run.skill_source_paths) && run.skill_source_paths.length > 0}
+              <details>
+                <summary>skill paths · {run.skill_source_paths.length}</summary>
+                <pre>{run.skill_source_paths.join("\n")}</pre>
+              </details>
+            {/if}
 
             {#if run.cancel_reason}
               <div class="reason">{run.cancel_reason}</div>

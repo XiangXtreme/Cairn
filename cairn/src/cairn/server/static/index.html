@@ -836,7 +836,7 @@
                   <div class="mt-1 text-xs text-slate-500" x-text="workerBindingSummary(worker).mcpDetail"></div>
                 </div>
                 <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                  <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">Skill 绑定</div>
+                  <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">客户端启用</div>
                   <div class="mt-1 text-sm font-medium text-slate-800" x-text="workerBindingSummary(worker).skill"></div>
                   <div class="mt-1 text-xs text-slate-500" x-text="workerBindingSummary(worker).skillDetail"></div>
                 </div>
@@ -1123,7 +1123,7 @@
             <template x-if="dispatchForm.mcp_servers.length === 0">
               <div class="px-6 py-16 text-center">
                 <div class="text-lg font-medium text-slate-800">还没有 MCP 服务器</div>
-                <div class="mt-2 text-sm text-slate-400">先注册一个 MCP，再决定让哪些 Worker 使用它。</div>
+                <div class="mt-2 text-sm text-slate-400">先注册一个 MCP，再决定让哪些 Agent 客户端启用它。</div>
               </div>
             </template>
 
@@ -1177,7 +1177,7 @@
                       </span>
                     </template>
                     <template x-if="workersUsingMcp(server.id).length === 0">
-                      <span class="text-xs text-slate-400">还没有 Worker 使用它</span>
+                      <span class="text-xs text-slate-400">还没有 Agent 客户端启用它</span>
                     </template>
                   </div>
 
@@ -1213,7 +1213,7 @@
 
           <div class="mt-5 flex flex-col gap-4 rounded-[24px] border border-slate-200 bg-slate-50/80 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <div class="text-sm font-medium text-slate-800">保存后会更新主容器注册表，并把启用的 MCP 注入到后续启动的 Worker。</div>
+              <div class="text-sm font-medium text-slate-800">保存后会更新主容器注册表，并把启用的 MCP 提供给后续启动的 Agent 客户端。</div>
               <p class="mt-1 text-xs text-slate-400">已经运行中的 Agent 不会被强制打断，新任务会读取最新绑定。</p>
             </div>
             <button @click="saveDispatchSettings()" :disabled="isSavingDispatchSettings || !!dispatchLoadError || !dispatchSettingsMeta.writable" class="shrink-0 rounded-2xl bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-800 transition disabled:opacity-40 disabled:cursor-not-allowed">
@@ -1229,7 +1229,7 @@
             <div class="min-w-0">
               <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Skills</div>
               <h3 class="mt-1 text-2xl font-semibold tracking-tight text-slate-900">容器 Skill 注册与分发</h3>
-              <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-500">这里尽量贴近 cc-switch 的 Skill 管理心智：以扫描容器内已有 Skill、导入到注册表、再控制 Claude / Codex 的启用状态为主，不强调手工从零创建。</p>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-500">这里尽量贴近 cc-switch 的 Skill 管理心智：以扫描容器内已有 Skill、导入到注册表、再控制 Claude / Codex 等 Agent 客户端的启用状态为主，不强调手工从零创建。</p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
               <button @click="discoverSkills()" class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition">扫描容器 Skill</button>
@@ -1260,7 +1260,7 @@
                 <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
                   <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">已绑定</div>
                   <div class="mt-1 text-lg font-semibold text-slate-800" x-text="boundSkillCount()"></div>
-                  <div class="mt-1 text-xs text-slate-500">至少被一个 Worker 使用</div>
+                  <div class="mt-1 text-xs text-slate-500">至少已对一个 Agent 客户端开放</div>
                 </div>
                 <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
                   <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">存在路径</div>
@@ -1277,7 +1277,7 @@
 
             <div class="rounded-3xl border border-slate-200 bg-slate-50/80 px-4 py-4">
               <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">发现结果</div>
-              <div class="mt-1 text-sm text-slate-500">扫描到的容器 Skill 会先出现在这里，再决定是否并入当前注册表。</div>
+                <div class="mt-1 text-sm text-slate-500">扫描到的容器 Skill 会先出现在这里，再决定是否并入当前注册表并提供给 Agent 客户端使用。</div>
               <div class="mt-4 space-y-2">
                 <template x-if="discoveredSkills.length === 0">
                   <div class="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-6 text-sm text-slate-400">当前还没有扫描结果。</div>
@@ -1305,7 +1305,7 @@
             <div class="flex items-center justify-between border-b border-slate-200 bg-white/70 px-5 py-3">
               <div>
                 <div class="text-sm font-medium text-slate-800">Skill 资源列表</div>
-                <div class="mt-1 text-xs text-slate-500">按条目维护容器路径、说明，以及对 Claude / Codex 的启用开关。</div>
+                <div class="mt-1 text-xs text-slate-500">按条目维护容器路径、说明，以及对 Claude / Codex 等客户端的启用开关。</div>
               </div>
               <div class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-500">本地注册表</div>
             </div>
@@ -1362,13 +1362,14 @@
                   </div>
 
                   <div class="flex flex-wrap gap-2">
-                    <template x-for="worker in workersUsingSkill(skill.id)" :key="`${skill.id}-${worker.name}`">
-                      <span class="rounded-full border px-2.5 py-1 text-[10px] font-semibold" :class="dispatchWorkerTypeClass(worker.type)">
-                        <span x-text="worker.name"></span>
+                    <template x-for="item in skillEnabledApps(skill)" :key="`${skill.id}-${item.key}`">
+                      <span class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold" :class="item.badgeClass">
+                        <img x-show="item.iconSrc" :src="item.iconSrc" :alt="item.label" class="h-3.5 w-3.5 rounded-sm object-contain opacity-80">
+                        <span x-text="item.label"></span>
                       </span>
                     </template>
-                    <template x-if="workersUsingSkill(skill.id).length === 0">
-                      <span class="text-xs text-slate-400">还没有 Worker 绑定这个 Skill</span>
+                    <template x-if="skillEnabledApps(skill).length === 0">
+                      <span class="text-xs text-slate-400">还没有对任何 Agent 客户端开放这个 Skill</span>
                     </template>
                   </div>
                 </div>
@@ -1379,7 +1380,7 @@
           <div class="mt-5 flex flex-col gap-4 rounded-[24px] border border-slate-200 bg-slate-50/80 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div class="text-sm font-medium text-slate-800" x-text="dispatchSettingsMode === 'ui' ? '保存后会写入 UI 真源并重新编译 dispatch_ui.yaml。' : '保存后会更新当前 YAML 配置。'"></div>
-              <p class="mt-1 text-xs text-slate-400">新开的项目会读取这里的 Skill 注册表与绑定关系，正在运行中的 Agent 不会热替换。</p>
+              <p class="mt-1 text-xs text-slate-400">新开的项目会读取这里的 Skill 注册表与客户端启用状态，正在运行中的 Agent 不会热替换。</p>
             </div>
             <button @click="saveDispatchSettings()" :disabled="isSavingDispatchSettings || !!dispatchLoadError || !dispatchSettingsMeta.writable" class="shrink-0 rounded-2xl bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-800 transition disabled:opacity-40 disabled:cursor-not-allowed">
               <span x-text="isSavingDispatchSettings ? '保存中...' : '保存 Skill 配置'"></span>
@@ -3204,7 +3205,7 @@ function cairnApp() {
     },
 
     boundSkillCount() {
-      return (this.dispatchForm?.skills || []).filter((skill) => this.skillWorkerCount(skill.id) > 0).length;
+      return (this.dispatchForm?.skills || []).filter((skill) => this.skillEnabledApps(skill).length > 0).length;
     },
 
     mcpAppSummaryCards() {
@@ -3217,7 +3218,7 @@ function cairnApp() {
         { key: 'codex', label: 'Codex', count: codexWorkers, detail: '启用了 MCP 的 Codex Worker' },
         { key: 'claude', label: 'Claude Code', count: claudeWorkers, detail: '启用了 MCP 的 Claude Worker' },
         { key: 'disabled', label: '未启用', count: disabled, detail: '已注册但关闭的 MCP' },
-        { key: 'unbound', label: '未绑定', count: unbound, detail: '还没有 Worker 使用它' },
+        { key: 'unbound', label: '未启用', count: unbound, detail: '还没有 Agent 客户端启用它' },
       ];
     },
 
@@ -3229,7 +3230,9 @@ function cairnApp() {
     },
 
     skillWorkersByType(type) {
-      return (this.dispatchForm?.workers || []).filter((worker) => worker.type === type && (worker.skill_ids || []).length > 0).length;
+      const appKey = type === 'claudecode' ? 'claude' : type === 'codex' ? 'codex' : '';
+      if (!appKey) return 0;
+      return (this.dispatchForm?.skills || []).filter((skill) => this.skillAppEnabled(skill, appKey)).length;
     },
 
     availableSkillAppDescriptors() {
@@ -3302,6 +3305,10 @@ function cairnApp() {
       if (appKey === 'claude') return skill.enabled_claude === true;
       if (appKey === 'codex') return skill.enabled_codex === true;
       return false;
+    },
+
+    skillEnabledApps(skill) {
+      return this.availableSkillAppDescriptors().filter((item) => this.skillAppEnabled(skill, item.key));
     },
 
     toggleSkillApp(skill, appKey) {
@@ -3517,8 +3524,8 @@ function cairnApp() {
         skill: worker?.skill_supported ? `${selectedSkillIds.length} 个已选` : '当前未接入',
         skillDetail: worker?.skill_supported
           ? (selectedSkillIds.length
-              ? `${activeSkillCount} 个启用，${Math.max(selectedSkillIds.length - activeSkillCount, 0)} 个未启用`
-              : '还没有绑定 Skill')
+              ? `${activeSkillCount} 个已对当前客户端启用，${Math.max(selectedSkillIds.length - activeSkillCount, 0)} 个未启用`
+              : '还没有为当前客户端启用 Skill')
           : (worker?.type === 'pi' ? 'Pi 先标记为预留态' : '当前类型暂未接入 Skill 同步'),
       };
     },

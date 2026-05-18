@@ -1,0 +1,7 @@
+interface:
+  display_name: "Cairn Creds and SMB"
+  short_description: "Handle Cairn credential, SMB, and hash attack paths."
+  default_prompt: "Use $cairn-creds-smb to choose the next credential, SMB, or hash step for this Cairn task."
+
+policy:
+  allow_implicit_invocation: true
