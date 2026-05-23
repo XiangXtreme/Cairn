@@ -224,6 +224,16 @@ function normalizeSkill(skill: Partial<SkillSettings>): SkillSettings {
   };
 }
 
+function skillEnabledForWorkerType(
+  skill: Pick<SkillSettings, 'enabled' | 'enabled_claude' | 'enabled_codex'>,
+  workerType: WorkerType,
+) {
+  if (skill.enabled === false) return false;
+  if (workerType === 'claudecode') return skill.enabled_claude === true;
+  if (workerType === 'codex') return skill.enabled_codex === true;
+  return false;
+}
+
 export const useDispatchSettingsStore = defineStore('dispatchSettings', () => {
   const ui = useUiStore();
   const leaseSettings = reactive<LeaseSettings>({ intent_timeout: 5, reason_timeout: 5 });
@@ -324,7 +334,10 @@ export const useDispatchSettingsStore = defineStore('dispatchSettings', () => {
         context_window: null,
         extra_env: sanitizeExtraEnv(provider.extra_env),
       })),
-      workers: form.workers.map(serializeWorker),
+      workers: form.workers.map((worker) => ({
+        ...serializeWorker(worker),
+        skill_ids: sanitizeWorkerSkillIds(worker),
+      })),
       mcp_servers: form.mcp_servers.map((server) => ({
         ...server,
         args: Array.isArray(server.args) ? server.args.filter((arg) => arg.trim()) : [],
@@ -334,7 +347,7 @@ export const useDispatchSettingsStore = defineStore('dispatchSettings', () => {
       worker_bindings: form.workers.map((worker) => ({
         worker_name: worker.name || '',
         mcp_server_ids: Array.isArray(worker.mcp_server_ids) ? [...worker.mcp_server_ids] : [],
-        skill_ids: Array.isArray(worker.skill_ids) ? [...worker.skill_ids] : [],
+        skill_ids: sanitizeWorkerSkillIds(worker),
       })),
     };
   }
@@ -464,6 +477,7 @@ export const useDispatchSettingsStore = defineStore('dispatchSettings', () => {
     worker.skill_supported = ['claudecode', 'codex'].includes(worker.type);
     if (!worker.mcp_supported) worker.mcp_server_ids = [];
     if (!worker.skill_supported) worker.skill_ids = [];
+    else worker.skill_ids = sanitizeWorkerSkillIds(worker);
   }
 
   function addProvider() {
@@ -569,10 +583,39 @@ export const useDispatchSettingsStore = defineStore('dispatchSettings', () => {
   }
 
   function toggleWorkerSkill(worker: EditableWorkerSettings, skillId: string) {
+    if (!availableSkillsForWorker(worker).some((skill) => skill.id === skillId)) return;
     const next = new Set(worker.skill_ids || []);
     if (next.has(skillId)) next.delete(skillId);
     else next.add(skillId);
     worker.skill_ids = [...next];
+  }
+
+  function skillEnabledForWorker(skill: SkillSettings, worker: EditableWorkerSettings) {
+    return skillEnabledForWorkerType(skill, worker.type);
+  }
+
+  function availableSkillsForWorker(worker: EditableWorkerSettings) {
+    return form.skills.filter((skill) => skillEnabledForWorker(skill, worker));
+  }
+
+  function sanitizeWorkerSkillIds(worker: EditableWorkerSettings) {
+    const availableSkillIds = new Set(availableSkillsForWorker(worker).map((skill) => skill.id));
+    return (worker.skill_ids || []).filter((skillId) => availableSkillIds.has(skillId));
+  }
+
+  function unavailableWorkerSkillIds(worker: EditableWorkerSettings) {
+    const activeSkillIds = new Set(availableSkillsForWorker(worker).map((skill) => skill.id));
+    return (worker.skill_ids || []).filter((skillId) => !activeSkillIds.has(skillId));
+  }
+
+  function setSkillClientEnabled(skill: SkillSettings, app: 'claude' | 'codex', enabled: boolean) {
+    if (app === 'claude') skill.enabled_claude = enabled;
+    else skill.enabled_codex = enabled;
+
+    for (const worker of form.workers) {
+      if (!worker.skill_supported) continue;
+      worker.skill_ids = sanitizeWorkerSkillIds(worker);
+    }
   }
 
   function toggleWorkerTask(worker: EditableWorkerSettings, taskType: TaskType) {
@@ -715,7 +758,11 @@ export const useDispatchSettingsStore = defineStore('dispatchSettings', () => {
     validateProviderBindings,
     toggleWorkerMcp,
     toggleWorkerSkill,
+    skillEnabledForWorker,
+    availableSkillsForWorker,
+    unavailableWorkerSkillIds,
     toggleWorkerTask,
+    setSkillClientEnabled,
     envEntries,
     addEnv,
     updateEnvKey,

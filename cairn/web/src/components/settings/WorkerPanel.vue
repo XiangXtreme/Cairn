@@ -44,11 +44,12 @@ function workerEnvCount(worker: EditableWorkerSettings) {
 function workerBindingSummary(worker: EditableWorkerSettings) {
   const provider = store.selectedProviderForWorker(worker);
   const enabledMcpIds = new Set(store.form.mcp_servers.filter((server) => server.enabled !== false).map((server) => server.id));
-  const enabledSkillIds = new Set(store.form.skills.filter((skill) => skill.enabled !== false).map((skill) => skill.id));
   const selectedMcpIds = Array.isArray(worker.mcp_server_ids) ? worker.mcp_server_ids : [];
   const selectedSkillIds = Array.isArray(worker.skill_ids) ? worker.skill_ids : [];
+  const enabledSkillIds = new Set(store.availableSkillsForWorker(worker).map((skill) => skill.id));
   const activeMcpCount = selectedMcpIds.filter((id) => enabledMcpIds.has(id)).length;
   const activeSkillCount = selectedSkillIds.filter((id) => enabledSkillIds.has(id)).length;
+  const inactiveSkillCount = Math.max(selectedSkillIds.length - activeSkillCount, 0);
   const providerLabel = provider ? provider.name || provider.id : '';
 
   return {
@@ -71,7 +72,7 @@ function workerBindingSummary(worker: EditableWorkerSettings) {
     skill: worker.skill_supported ? `${selectedSkillIds.length} 个已选` : '当前未接入',
     skillDetail: worker.skill_supported
       ? selectedSkillIds.length
-        ? `${activeSkillCount} 个已对当前客户端启用，${Math.max(selectedSkillIds.length - activeSkillCount, 0)} 个未启用`
+        ? `${activeSkillCount} 个已对当前客户端启用，${inactiveSkillCount} 个未启用`
         : '还没有为当前客户端启用 Skill'
       : worker.type === 'pi'
         ? 'Pi 先标记为预留态'
@@ -399,7 +400,7 @@ function workerBindingSummary(worker: EditableWorkerSettings) {
                     </div>
                     <div v-if="worker.skill_supported" class="mt-2 flex flex-wrap gap-2">
                       <button
-                        v-for="skill in store.form.skills"
+                        v-for="skill in store.availableSkillsForWorker(worker)"
                         :key="skill.id"
                         type="button"
                         class="rounded-full border px-3 py-1.5 text-xs font-medium transition"
@@ -410,6 +411,18 @@ function workerBindingSummary(worker: EditableWorkerSettings) {
                       </button>
                     </div>
                     <p v-if="worker.skill_supported && store.form.skills.length === 0" class="mt-2 text-xs text-slate-400">还没有注册 Skill。</p>
+                    <p
+                      v-else-if="worker.skill_supported && store.availableSkillsForWorker(worker).length === 0"
+                      class="mt-2 text-xs text-slate-400"
+                    >
+                      当前没有对这个客户端开放的 Skill。去 Skill 面板点亮对应客户端图标后，这里才会出现。
+                    </p>
+                    <p
+                      v-if="worker.skill_supported && store.unavailableWorkerSkillIds(worker).length > 0"
+                      class="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900"
+                    >
+                      有 {{ store.unavailableWorkerSkillIds(worker).length }} 个旧 Skill 绑定已不再对当前客户端开放，保存时会自动清理。
+                    </p>
                     <p v-if="!worker.skill_supported" class="mt-2 text-xs text-slate-400">
                       {{ worker.type === 'pi' ? 'Pi 当前明确标记为 Skill 预留态，暂不自动注入。' : '当前 Worker 类型暂未接入 Skill 同步。' }}
                     </p>

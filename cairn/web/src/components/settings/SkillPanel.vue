@@ -9,8 +9,6 @@ import SkillAppToggleGroup from '@/components/ui/SkillAppToggleGroup.vue';
 import TextInput from '@/components/ui/TextInput.vue';
 import { useDispatchSettingsStore } from '@/stores/dispatchSettings';
 import { useUiStore } from '@/stores/ui';
-import type { SkillSettings } from '@/types/dispatch';
-
 const store = useDispatchSettingsStore();
 const ui = useUiStore();
 
@@ -39,13 +37,6 @@ async function onZipSelected(event: Event) {
   }
 }
 
-function toggleSkillApp(skill: SkillSettings, app: 'claude' | 'codex', enabled: boolean) {
-  if (app === 'claude') {
-    skill.enabled_claude = enabled;
-    return;
-  }
-  skill.enabled_codex = enabled;
-}
 </script>
 
 <template>
@@ -108,7 +99,7 @@ function toggleSkillApp(skill: SkillSettings, app: 'claude' | 'codex', enabled: 
               <SkillAppToggleGroup
                 :enabled-claude="skill.enabled_claude"
                 :enabled-codex="skill.enabled_codex"
-                @toggle="(app, enabled) => toggleSkillApp(skill, app, enabled)"
+                @toggle="(app, enabled) => store.setSkillClientEnabled(skill, app, enabled)"
               />
             </div>
             <div class="mt-3 truncate text-base font-semibold text-slate-900">{{ skill.name || skill.id || '未命名 Skill' }}</div>
