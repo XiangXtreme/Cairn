@@ -5,9 +5,11 @@ import AppButton from '@/components/ui/AppButton.vue';
 import BadgePill from '@/components/ui/BadgePill.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import FormField from '@/components/ui/FormField.vue';
+import SkillAppToggleGroup from '@/components/ui/SkillAppToggleGroup.vue';
 import TextInput from '@/components/ui/TextInput.vue';
 import { useDispatchSettingsStore } from '@/stores/dispatchSettings';
 import { useUiStore } from '@/stores/ui';
+import type { SkillSettings } from '@/types/dispatch';
 
 const store = useDispatchSettingsStore();
 const ui = useUiStore();
@@ -35,6 +37,14 @@ async function onZipSelected(event: Event) {
   } finally {
     input.value = '';
   }
+}
+
+function toggleSkillApp(skill: SkillSettings, app: 'claude' | 'codex', enabled: boolean) {
+  if (app === 'claude') {
+    skill.enabled_claude = enabled;
+    return;
+  }
+  skill.enabled_codex = enabled;
 }
 </script>
 
@@ -94,11 +104,16 @@ async function onZipSelected(event: Event) {
           <div class="min-w-0">
             <div class="flex flex-wrap items-center gap-2">
               <BadgePill :tone="skill.enabled ? 'teal' : 'slate'">{{ skill.enabled ? '启用中' : '已禁用' }}</BadgePill>
-              <BadgePill :tone="skill.enabled_claude ? 'sky' : 'slate'">Claude</BadgePill>
-              <BadgePill :tone="skill.enabled_codex ? 'brand' : 'slate'">Codex</BadgePill>
+              <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">客户端</span>
+              <SkillAppToggleGroup
+                :enabled-claude="skill.enabled_claude"
+                :enabled-codex="skill.enabled_codex"
+                @toggle="(app, enabled) => toggleSkillApp(skill, app, enabled)"
+              />
             </div>
             <div class="mt-3 truncate text-base font-semibold text-slate-900">{{ skill.name || skill.id || '未命名 Skill' }}</div>
             <div class="mt-1 break-all text-xs text-slate-500">{{ skill.path || '未设置路径' }}</div>
+            <div class="mt-2 text-xs leading-5 text-slate-400">点亮上方图标后，这个 Skill 才会出现在对应客户端 Worker 的可绑定列表里。</div>
           </div>
           <div class="flex flex-wrap items-center gap-2">
             <AppButton size="sm" :variant="skill.enabled ? 'secondary' : 'brand'" @click="skill.enabled = !skill.enabled">
@@ -125,14 +140,6 @@ async function onZipSelected(event: Event) {
               class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm leading-6 text-slate-700 transition focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
             />
           </FormField>
-          <label class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-            <span class="text-sm font-medium text-slate-700">Claude Code 启用</span>
-            <input v-model="skill.enabled_claude" type="checkbox" class="h-5 w-5 rounded border-slate-300 text-brand-500 focus:ring-brand-200" />
-          </label>
-          <label class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-            <span class="text-sm font-medium text-slate-700">Codex 启用</span>
-            <input v-model="skill.enabled_codex" type="checkbox" class="h-5 w-5 rounded border-slate-300 text-brand-500 focus:ring-brand-200" />
-          </label>
         </div>
       </article>
 
