@@ -87,7 +87,7 @@ async function onZipSelected(event: Event) {
     <div class="space-y-4 px-5 py-5 lg:px-8">
       <article
         v-for="(skill, idx) in store.form.skills"
-        :key="skill.id || idx"
+        :key="idx"
         class="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm"
       >
         <div class="flex flex-col gap-4 border-b border-slate-200/80 bg-slate-50/80 px-4 py-4 lg:px-6 xl:flex-row xl:items-start xl:justify-between">
