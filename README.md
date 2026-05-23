@@ -186,10 +186,26 @@ Edit `dispatch_docker.yaml` and fill in your LLM endpoints and API keys, then:
 
 ```bash
 docker pull --platform=linux/amd64 ghcr.io/oritera/cairn-worker-container:latest
-docker compose up --build
+./scripts/start-cairn-docker.sh
 ```
 
 This starts `cairn-server` on port `8000` and `cairn-dispatcher` after the server health check passes. Dispatcher runtime files are persisted under `./datas/cairn-runtime/`.
+
+By default the script starts the full stack, including the observer UI on `http://127.0.0.1:8081`. When the local observer bundle is missing, it prepares the embedded frontend assets and local `agentsview` binary automatically before starting Docker.
+
+Useful variants:
+
+```bash
+./scripts/start-cairn-docker.sh --core-only
+./scripts/start-cairn-docker.sh --mode file
+./scripts/start-cairn-docker.sh --logs
+```
+
+When observer auth is enabled, fetch the current login token from the container logs:
+
+```bash
+docker compose logs cairn-observer | rg 'Auth enabled\. Token:'
+```
 
 Use this mode when you want Linux worker isolation. Use the local runtime when you want direct access to host-installed `claude`, `codex`, or `pi` CLIs.
 

@@ -65,6 +65,7 @@ fi
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "$script_dir/.." && pwd)"
+prepare_observer_script="$repo_root/scripts/prepare-cairn-observer.sh"
 
 cd "$repo_root"
 
@@ -80,6 +81,10 @@ if [[ "$profile" == "core" || "$profile" == "all" ]]; then
 fi
 if [[ "$profile" == "all" ]]; then
   services+=(cairn-observer)
+fi
+
+if [[ "$profile" == "all" ]]; then
+  "$prepare_observer_script"
 fi
 
 compose=(docker compose up -d)
@@ -108,6 +113,12 @@ Useful commands:
   docker compose ps
   docker compose logs -f cairn-dispatcher
 EOF
+
+if [[ "$profile" == "all" ]]; then
+  cat <<'EOF'
+  docker compose logs cairn-observer | rg 'Auth enabled\. Token:'
+EOF
+fi
 
 if [[ "$logs" == "1" ]]; then
   docker compose logs -f "${services[@]}"

@@ -37,7 +37,7 @@ Options:
   --host HOST             Bind host, default 127.0.0.1
   --port PORT             Bind port, default 8081
   --runtime-dir DIR       Cairn runtime directory, default auto-detect
-  --no-build              Do not auto-build missing frontend assets
+  --no-build              Do not auto-prepare the local observer bundle
   --no-browser            Do not open browser on startup
 EOF
       exit 0
@@ -52,9 +52,7 @@ done
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "$script_dir/.." && pwd)"
 observer_dir="$repo_root/observer/agentsview"
-frontend_dir="$observer_dir/frontend"
-embedded_dist="$observer_dir/internal/web/dist"
-asset_dir="$embedded_dist/assets"
+prepare_observer_script="$repo_root/scripts/prepare-cairn-observer.sh"
 
 if [[ ! -d "$observer_dir" ]]; then
   echo "Cairn observer source not found: $observer_dir" >&2
@@ -73,13 +71,8 @@ else
   runtime_dir="$repo_root/cairn/.cairn-runtime"
 fi
 
-if [[ "$no_build" != "1" && ( ! -d "$asset_dir" || -z "$(find "$asset_dir" -maxdepth 1 -type f -print -quit 2>/dev/null)" ) ]]; then
-  echo "Observer frontend assets are missing; building frontend..."
-  (cd "$frontend_dir" && npm install && npm run build)
-  rm -rf "$embedded_dist"
-  mkdir -p "$(dirname "$embedded_dist")"
-  cp -R "$frontend_dir/dist" "$embedded_dist"
-  printf '%s\n' 'keep embed dir for generated frontend assets' > "$embedded_dist/.keep"
+if [[ "$no_build" != "1" ]]; then
+  "$prepare_observer_script"
 fi
 
 mkdir -p "$runtime_dir"

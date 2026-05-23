@@ -41,6 +41,10 @@ function workerEnvCount(worker: EditableWorkerSettings) {
   return store.envEntries(worker.extra_env).length;
 }
 
+function isWorkerLocked(worker: EditableWorkerSettings) {
+  return worker.enabled === false;
+}
+
 function workerBindingSummary(worker: EditableWorkerSettings) {
   const provider = store.selectedProviderForWorker(worker);
   const enabledMcpIds = new Set(store.form.mcp_servers.filter((server) => server.enabled !== false).map((server) => server.id));
@@ -132,7 +136,7 @@ function workerBindingSummary(worker: EditableWorkerSettings) {
               <AppButton
                 size="sm"
                 :icon="FlaskConical"
-                :disabled="worker.is_testing_healthcheck || worker.type === 'mock'"
+                :disabled="worker.is_testing_healthcheck || worker.type === 'mock' || isWorkerLocked(worker)"
                 @click="store.testWorkerHealthcheck(worker)"
               >
                 {{ worker.is_testing_healthcheck ? '测试中...' : '测试模型' }}
@@ -145,13 +149,13 @@ function workerBindingSummary(worker: EditableWorkerSettings) {
           </div>
         </div>
 
-        <div class="px-4 py-5 lg:px-6">
+        <div class="px-4 py-5 lg:px-6" :aria-disabled="isWorkerLocked(worker)">
           <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-12">
             <FormField label="Worker 名称" class="xl:col-span-3">
-              <TextInput v-model="worker.name" />
+              <TextInput v-model="worker.name" :disabled="isWorkerLocked(worker)" />
             </FormField>
             <FormField label="类型" class="xl:col-span-2">
-              <SelectInput v-model="worker.type" @change="store.onWorkerTypeChange(worker)">
+              <SelectInput v-model="worker.type" :disabled="isWorkerLocked(worker)" @change="store.onWorkerTypeChange(worker)">
                 <option value="claudecode">Claude Code</option>
                 <option value="codex">Codex</option>
                 <option value="pi">Pi</option>
@@ -159,7 +163,7 @@ function workerBindingSummary(worker: EditableWorkerSettings) {
               </SelectInput>
             </FormField>
             <FormField label="Provider 绑定" class="xl:col-span-3">
-              <SelectInput v-model="worker.provider_id" :disabled="worker.provider_supported === false || worker.type === 'mock'">
+              <SelectInput v-model="worker.provider_id" :disabled="isWorkerLocked(worker) || worker.provider_supported === false || worker.type === 'mock'">
                 <option value="">未绑定</option>
                 <option v-for="(provider, providerIndex) in store.providersForWorker(worker)" :key="providerIndex" :value="provider.id">
                   {{ provider.name || provider.id }}
@@ -170,22 +174,22 @@ function workerBindingSummary(worker: EditableWorkerSettings) {
               </p>
             </FormField>
             <FormField label="模型" class="xl:col-span-3">
-              <TextInput v-model="worker.model" :disabled="worker.type === 'mock'" />
+              <TextInput v-model="worker.model" :disabled="isWorkerLocked(worker) || worker.type === 'mock'" />
             </FormField>
             <FormField label="并发上限" class="xl:col-span-2">
-              <TextInput v-model="worker.max_running" type="number" />
+              <TextInput v-model="worker.max_running" type="number" :disabled="isWorkerLocked(worker)" />
             </FormField>
             <FormField label="优先级" class="xl:col-span-2">
-              <TextInput v-model="worker.priority" type="number" />
+              <TextInput v-model="worker.priority" type="number" :disabled="isWorkerLocked(worker)" />
             </FormField>
           </div>
 
           <div v-if="worker.type === 'pi'" class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             <FormField label="Pi Provider API">
-              <TextInput v-model="worker.provider_api" />
+              <TextInput v-model="worker.provider_api" :disabled="isWorkerLocked(worker)" />
             </FormField>
             <FormField label="Pi 上下文窗口">
-              <TextInput v-model="worker.context_window" type="number" />
+              <TextInput v-model="worker.context_window" type="number" :disabled="isWorkerLocked(worker)" />
             </FormField>
           </div>
 
@@ -299,6 +303,7 @@ function workerBindingSummary(worker: EditableWorkerSettings) {
                 <AppButton
                   size="sm"
                   :icon="worker.show_direct_config ? ChevronDown : ChevronRight"
+                  :disabled="isWorkerLocked(worker)"
                   @click="worker.show_direct_config = !worker.show_direct_config"
                 >
                   {{ worker.show_direct_config ? '收起直连端点' : '展开直连端点' }}
@@ -311,10 +316,10 @@ function workerBindingSummary(worker: EditableWorkerSettings) {
               class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
             >
               <FormField label="直连 Base URL">
-                <TextInput v-model="worker.base_url" />
+                <TextInput v-model="worker.base_url" :disabled="isWorkerLocked(worker)" />
               </FormField>
               <FormField label="直连 API Key / Token" :hint="worker.has_auth_token ? '已存在 key，留空会保持不变。' : '这个 Worker 还没有保存 key。'">
-                <TextInput v-model="worker.auth_token" placeholder="留空则保留现有 key" />
+                <TextInput v-model="worker.auth_token" placeholder="留空则保留现有 key" :disabled="isWorkerLocked(worker)" />
               </FormField>
             </div>
           </div>
@@ -333,11 +338,12 @@ function workerBindingSummary(worker: EditableWorkerSettings) {
                   <AppButton
                     size="sm"
                     :icon="worker.show_runtime_env ? ChevronDown : ChevronRight"
+                    :disabled="isWorkerLocked(worker)"
                     @click="worker.show_runtime_env = !worker.show_runtime_env"
                   >
                     {{ worker.show_runtime_env ? '收起' : '展开' }}
                   </AppButton>
-                  <AppButton v-if="worker.show_runtime_env" size="sm" :icon="Plus" @click="store.addEnv(worker, 'extra_env')">新增变量</AppButton>
+                  <AppButton v-if="worker.show_runtime_env" size="sm" :icon="Plus" :disabled="isWorkerLocked(worker)" @click="store.addEnv(worker, 'extra_env')">新增变量</AppButton>
                 </div>
               </div>
               <div v-if="worker.show_runtime_env" class="mt-3 space-y-2">
@@ -350,15 +356,17 @@ function workerBindingSummary(worker: EditableWorkerSettings) {
                     :value="row.key"
                     placeholder="KEY"
                     class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                    :disabled="isWorkerLocked(worker)"
                     @input="store.updateEnvKey(worker, 'extra_env', row.key, ($event.target as HTMLInputElement).value)"
                   />
                   <input
                     :value="row.value"
                     placeholder="VALUE"
                     class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                    :disabled="isWorkerLocked(worker)"
                     @input="store.updateEnvValue(worker, 'extra_env', row.key, ($event.target as HTMLInputElement).value)"
                   />
-                  <AppButton size="sm" variant="danger" @click="store.removeEnv(worker, 'extra_env', row.key)">删除</AppButton>
+                  <AppButton size="sm" variant="danger" :disabled="isWorkerLocked(worker)" @click="store.removeEnv(worker, 'extra_env', row.key)">删除</AppButton>
                 </div>
                 <div v-if="workerEnvCount(worker) === 0" class="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-400">
                   当前没有 Worker 专用环境变量。
@@ -380,7 +388,8 @@ function workerBindingSummary(worker: EditableWorkerSettings) {
                         v-for="server in store.form.mcp_servers"
                         :key="server.id"
                         type="button"
-                        class="rounded-full border px-3 py-1.5 text-xs font-medium transition"
+                        :disabled="isWorkerLocked(worker)"
+                        class="rounded-full border px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-40"
                         :class="worker.mcp_server_ids.includes(server.id) ? 'border-brand-200 bg-brand-50 text-brand-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'"
                         @click="store.toggleWorkerMcp(worker, server.id)"
                       >
@@ -403,7 +412,8 @@ function workerBindingSummary(worker: EditableWorkerSettings) {
                         v-for="skill in store.availableSkillsForWorker(worker)"
                         :key="skill.id"
                         type="button"
-                        class="rounded-full border px-3 py-1.5 text-xs font-medium transition"
+                        :disabled="isWorkerLocked(worker)"
+                        class="rounded-full border px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-40"
                         :class="worker.skill_ids.includes(skill.id) ? 'border-brand-200 bg-brand-50 text-brand-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'"
                         @click="store.toggleWorkerSkill(worker, skill.id)"
                       >
@@ -437,7 +447,8 @@ function workerBindingSummary(worker: EditableWorkerSettings) {
                     v-for="taskType in taskTypes"
                     :key="taskType"
                     type="button"
-                    class="rounded-full border px-3 py-1.5 text-xs font-medium transition"
+                    :disabled="isWorkerLocked(worker)"
+                    class="rounded-full border px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-40"
                     :class="worker.task_types.includes(taskType) ? 'border-brand-200 bg-brand-50 text-brand-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'"
                     @click="store.toggleWorkerTask(worker, taskType)"
                   >

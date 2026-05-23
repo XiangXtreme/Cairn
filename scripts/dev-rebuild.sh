@@ -31,6 +31,7 @@ log() {
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "$script_dir/.." && pwd)"
 observer_dir="$repo_root/observer/agentsview"
+prepare_observer_script="$repo_root/scripts/prepare-cairn-observer.sh"
 
 cd "$repo_root"
 
@@ -58,21 +59,8 @@ rebuild_observer() {
     exit 1
   fi
 
-  log "Building agentsview frontend bundle"
-  (
-    cd "$observer_dir/frontend"
-    npm run build
-  )
-
-  log "Syncing frontend bundle into embedded web assets"
-  rm -rf "$observer_dir/internal/web/dist"
-  cp -r "$observer_dir/frontend/dist" "$observer_dir/internal/web/dist"
-
-  log "Building local agentsview binary with FTS5"
-  (
-    cd "$observer_dir"
-    CGO_ENABLED=1 go build -tags fts5 -o agentsview ./cmd/agentsview
-  )
+  log "Refreshing local Cairn observer bundle"
+  "$prepare_observer_script" --force
 
   log "Starting/restarting cairn-observer"
   docker compose up -d cairn-observer
