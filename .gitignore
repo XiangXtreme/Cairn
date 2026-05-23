@@ -17,3 +17,8 @@ observer/agentsview/tmp/
 observer/agentsview/data/
 observer/agentsview/sessions/
 observer/agentsview/html/
+
+# Cairn Vue UI
+cairn/web/node_modules/
+cairn/web/.vite/
+cairn/web/dist/

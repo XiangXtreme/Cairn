@@ -151,6 +151,21 @@ uv run --project cairn cairn dispatch --config dispatch.yaml --startup-healthche
 
 Runtime files, prompt snapshots, and per-project working directories are written under `.cairn-runtime/` by default.
 
+### UI Development
+
+Cairn serves the built UI from `cairn/src/cairn/server/static`. The modern settings UI lives in `cairn/web` and keeps the legacy workspace available while settings pages are migrated.
+
+```bash
+# Install frontend dependencies once
+npm install --prefix cairn/web
+
+# Run the Vite dev server; it proxies API calls to the Cairn server on 8000
+npm run --prefix cairn/web dev
+
+# Build the static UI served by FastAPI
+npm run --prefix cairn/web build
+```
+
 ### Optional Observer Layer
 
 Cairn can optionally run an `observe` task after higher-priority `reason` and `explore` work is idle. The observer reads the graph snapshot plus recent worker run records, then writes compact Hints, project summaries, and Fact/Intent metadata such as priority, status, tags, and failure boundaries.
