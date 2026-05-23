@@ -24,6 +24,7 @@ from cairn.server.models import (
     DispatchBootstrapTaskSettings,
     DispatchExploreTaskSettings,
     DispatchModeInfo,
+    DispatchObserveTaskSettings,
     DispatchReasonTaskSettings,
     DispatchRuntimeSettings,
     DispatchSettings,
@@ -75,7 +76,7 @@ _SKILL_SUPPORT_MATRIX: dict[WorkerType, bool] = {
     "pi": False,
     "mock": False,
 }
-_TASK_TYPE_ORDER: tuple[TaskType, ...] = ("bootstrap", "reason", "explore")
+_TASK_TYPE_ORDER: tuple[TaskType, ...] = ("bootstrap", "reason", "explore", "observe")
 _DISPATCH_SETTINGS_MODE_ENV = "CAIRN_DISPATCH_SETTINGS_MODE"
 _UI_DISPATCH_CONFIG_ENV = "CAIRN_UI_DISPATCH_CONFIG"
 _MCP_ENV_KEY = "CAIRN_MCP_SERVERS"
@@ -416,6 +417,13 @@ def run_worker_healthcheck(body: WorkerHealthcheckRequest) -> WorkerHealthcheckR
                         "timeout": settings.tasks.explore.timeout,
                         "conclude_timeout": settings.tasks.explore.conclude_timeout,
                     },
+                    "observe": {
+                        "enabled": settings.tasks.observe.enabled,
+                        "timeout": settings.tasks.observe.timeout,
+                        "min_interval_seconds": settings.tasks.observe.min_interval_seconds,
+                        "recent_run_limit": settings.tasks.observe.recent_run_limit,
+                        "max_updates": settings.tasks.observe.max_updates,
+                    },
                 },
                 "execution": {
                     "backend": "local",
@@ -714,6 +722,7 @@ def _tasks_to_settings(tasks_raw: dict[str, Any]) -> DispatchTaskSettings:
         bootstrap=DispatchBootstrapTaskSettings(**(tasks_raw.get("bootstrap") or {})),
         reason=DispatchReasonTaskSettings(**(tasks_raw.get("reason") or {})),
         explore=DispatchExploreTaskSettings(**(tasks_raw.get("explore") or {})),
+        observe=DispatchObserveTaskSettings(**(tasks_raw.get("observe") or {})),
     )
 
 
@@ -1113,8 +1122,14 @@ def _sync_skill_dir(source_dir: Path, target_dir: Path) -> bool:
     if not source_dir.exists():
         return False
     if target_dir.exists():
-        shutil.rmtree(target_dir)
-    shutil.copytree(source_dir, target_dir)
+        try:
+            shutil.rmtree(target_dir)
+        except PermissionError:
+            return False
+    try:
+        shutil.copytree(source_dir, target_dir)
+    except PermissionError:
+        return False
     return True
 
 

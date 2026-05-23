@@ -10,7 +10,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
-TaskType = Literal["reason", "explore", "bootstrap"]
+TaskType = Literal["reason", "explore", "bootstrap", "observe"]
 WorkerType = Literal["claudecode", "codex", "pi", "mock"]
 ExecutionBackend = Literal["local", "docker"]
 CompletedAction = Literal["remove", "stop"]
@@ -41,6 +41,7 @@ DEFAULT_PROMPT_REQUIRED_TOKENS: dict[str, tuple[str, ...]] = {
     "explore_conclude.md": ("{graph_yaml}", "{intent_id}", "{intent_description}"),
     "bootstrap.md": ("{origin}", "{goal}", "{hints}"),
     "bootstrap_conclude.md": ("{origin}", "{goal}", "{hints}"),
+    "observe.md": ("{graph_yaml}", "{timeline}", "{metadata_json}", "{recent_runs}", "{max_updates}"),
 }
 
 PROMPT_REQUIRED_TOKENS_BY_GROUP: dict[str, dict[str, tuple[str, ...]]] = {
@@ -50,6 +51,7 @@ PROMPT_REQUIRED_TOKENS_BY_GROUP: dict[str, dict[str, tuple[str, ...]]] = {
         "explore_conclude.md": ("{intent_id}",),
         "bootstrap.md": ("{origin}", "{goal}", "{hints}"),
         "bootstrap_conclude.md": ("{origin}", "{goal}", "{hints}"),
+        "observe.md": ("{metadata_json}", "{recent_runs}", "{max_updates}"),
     }
 }
 
@@ -60,6 +62,7 @@ MOCK_ALLOWED_OUTCOMES: dict[str, frozenset[str]] = {
     "explore_conclude": frozenset({"fact", "rejected", "invalid_json", "invalid_payload", "command_fail"}),
     "bootstrap": frozenset({"complete", "fact", "rejected", "invalid_json", "invalid_payload", "command_fail"}),
     "bootstrap_conclude": frozenset({"fact", "rejected", "invalid_json", "invalid_payload", "command_fail"}),
+    "observe": frozenset({"update", "noop", "rejected", "invalid_json", "invalid_payload", "command_fail"}),
 }
 
 MOCK_DEFAULT_BEHAVIOR: dict[str, dict[str, Any]] = {
@@ -120,6 +123,17 @@ MOCK_DEFAULT_BEHAVIOR: dict[str, dict[str, Any]] = {
             "command_fail": "0.0",
         },
     },
+    "observe": {
+        "delay": [0.05, 0.3],
+        "outcomes": {
+            "update": "1.0",
+            "noop": "0.0",
+            "rejected": "0.0",
+            "invalid_json": "0.0",
+            "invalid_payload": "0.0",
+            "command_fail": "0.0",
+        },
+    },
 }
 
 MOCK_ALLOWED_ENV_KEYS = frozenset(
@@ -144,10 +158,19 @@ class BootstrapTaskConfig(BaseModel):
     conclude_timeout: int = Field(gt=0)
 
 
+class ObserveTaskConfig(BaseModel):
+    enabled: bool = False
+    timeout: int = Field(gt=0, default=300)
+    min_interval_seconds: int = Field(ge=0, default=60)
+    recent_run_limit: int = Field(ge=1, default=10)
+    max_updates: int = Field(ge=1, default=4)
+
+
 class TasksConfig(BaseModel):
     bootstrap: BootstrapTaskConfig
     reason: ReasonTaskConfig
     explore: ExploreTaskConfig
+    observe: ObserveTaskConfig = Field(default_factory=ObserveTaskConfig)
 
 
 class ExecutionConfig(BaseModel):
@@ -264,7 +287,7 @@ class DispatchConfig(BaseModel):
     def load(cls, path: Path) -> "DispatchConfig":
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         config = cls.model_validate(data)
-        validate_prompt_resources(config.runtime.prompt_group)
+        validate_prompt_resources(config.runtime.prompt_group, observe_enabled=config.tasks.observe.enabled)
         return config
 
 
@@ -280,12 +303,14 @@ def _validate_optional_positive_int_env(worker_name: str, env: dict[str, str], k
         raise ValueError(f"worker {worker_name} env {key} must be greater than 0")
 
 
-def validate_prompt_resources(prompt_group: str) -> None:
+def validate_prompt_resources(prompt_group: str, *, observe_enabled: bool = False) -> None:
     prompts_dir = resources.files("cairn.dispatcher.prompts")
     group_dir = prompts_dir.joinpath(prompt_group)
     if not group_dir.is_dir():
         raise ValueError(f"missing prompt group: {prompt_group}")
-    required_tokens = PROMPT_REQUIRED_TOKENS_BY_GROUP.get(prompt_group, DEFAULT_PROMPT_REQUIRED_TOKENS)
+    required_tokens = dict(PROMPT_REQUIRED_TOKENS_BY_GROUP.get(prompt_group, DEFAULT_PROMPT_REQUIRED_TOKENS))
+    if not observe_enabled:
+        required_tokens.pop("observe.md", None)
     for name, tokens in required_tokens.items():
         try:
             content = group_dir.joinpath(name).read_text(encoding="utf-8")

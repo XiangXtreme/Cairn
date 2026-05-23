@@ -9,7 +9,7 @@ from pydantic import TypeAdapter
 import requests
 from requests.adapters import HTTPAdapter
 
-from cairn.server.models import Intent, ProjectDetail, ProjectSummary, Settings
+from cairn.server.models import Intent, ProjectDetail, ProjectMetadata, ProjectSummary, Settings
 
 LOG = logging.getLogger(__name__)
 
@@ -72,6 +72,20 @@ class CairnClient:
         response.raise_for_status()
         return response.text
 
+    def export_timeline(self, project_id: str) -> str:
+        response = self._session().get(
+            self._url(f"/projects/{project_id}/export"),
+            params={"format": "timeline"},
+            timeout=self._timeout,
+        )
+        response.raise_for_status()
+        return response.text
+
+    def get_metadata(self, project_id: str) -> ProjectMetadata:
+        response = self._session().get(self._url(f"/projects/{project_id}/metadata"), timeout=self._timeout)
+        response.raise_for_status()
+        return ProjectMetadata.model_validate(response.json())
+
     def heartbeat(self, project_id: str, intent_id: str, worker: str) -> ApiResult:
         return self._request_json(
             "POST",
@@ -126,6 +140,41 @@ class CairnClient:
             "POST",
             f"/projects/{project_id}/intents",
             json={"from": from_ids, "description": description, "creator": creator, "worker": None},
+        )
+
+    def create_hint(self, project_id: str, content: str, creator: str) -> ApiResult:
+        return self._request_json(
+            "POST",
+            f"/projects/{project_id}/hints",
+            json={"content": content, "creator": creator},
+        )
+
+    def update_fact_metadata(self, project_id: str, fact_id: str, payload: dict[str, Any]) -> ApiResult:
+        return self._request_json(
+            "PATCH",
+            f"/projects/{project_id}/facts/{fact_id}/metadata",
+            json=payload,
+        )
+
+    def update_intent_metadata(self, project_id: str, intent_id: str, payload: dict[str, Any]) -> ApiResult:
+        return self._request_json(
+            "PATCH",
+            f"/projects/{project_id}/intents/{intent_id}/metadata",
+            json=payload,
+        )
+
+    def update_project_summary(self, project_id: str, content: str, source: str) -> ApiResult:
+        return self._request_json(
+            "PUT",
+            f"/projects/{project_id}/summary",
+            json={"content": content, "source": source},
+        )
+
+    def update_observer_checkpoint(self, project_id: str, last_digest: str) -> ApiResult:
+        return self._request_json(
+            "PUT",
+            f"/projects/{project_id}/observer/checkpoint",
+            json={"last_digest": last_digest},
         )
 
     def _request_json(self, method: str, path: str, json: dict[str, Any]) -> ApiResult:

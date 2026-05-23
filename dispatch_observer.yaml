@@ -22,8 +22,8 @@ tasks:
     timeout: 300
     conclude_timeout: 90
   observe:
-    enabled: false
-    timeout: 300
+    enabled: true
+    timeout: 240
     min_interval_seconds: 60
     recent_run_limit: 10
     max_updates: 4
@@ -50,6 +50,16 @@ workers:
   - explore
   max_running: 2
   priority: 0
+  env:
+    CODEX_MODEL: qwen3.6-plus
+    CODEX_BASE_URL: https://dashscope.aliyuncs.com/compatible-mode/v1
+    OPENAI_API_KEY: sk-your-dashscope-api-key
+- name: codex_observer
+  type: codex
+  task_types:
+  - observe
+  max_running: 1
+  priority: 10
   env:
     CODEX_MODEL: qwen3.6-plus
     CODEX_BASE_URL: https://dashscope.aliyuncs.com/compatible-mode/v1

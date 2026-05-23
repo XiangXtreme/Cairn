@@ -4,6 +4,7 @@ import logging
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
@@ -18,8 +19,13 @@ from cairn.dispatcher.scheduler.worker_select import choose_worker
 from cairn.dispatcher.tasks.bootstrap import run_bootstrap_task
 from cairn.dispatcher.tasks.common import mark_stale_worker_run_records
 from cairn.dispatcher.tasks.explore import run_explore_task
+from cairn.dispatcher.tasks.observe import (
+    build_observe_digest,
+    read_recent_worker_runs,
+    run_observe_task,
+)
 from cairn.dispatcher.tasks.reason import run_reason_task
-from cairn.server.models import Intent, ProjectDetail, ProjectSummary
+from cairn.server.models import Intent, ProjectDetail, ProjectMetadata, ProjectSummary
 
 LOG = logging.getLogger(__name__)
 UNHEALTHY_RETRY_AFTER_SECONDS = 5
@@ -291,6 +297,7 @@ class DispatcherLoop:
                 summary.id,
             )
             return False
+        metadata = self.client.get_metadata(summary.id)
         running_intent_ids = self._project_running_explore_intents(summary.id)
         unclaimed_intents = [
             intent
@@ -299,6 +306,7 @@ class DispatcherLoop:
             and intent.worker is None
             and intent.id not in running_intent_ids
             and not self._is_bootstrap_intent(intent)
+            and self._intent_dispatchable(intent, metadata)
         ]
         if running_intent_ids and not unclaimed_intents:
             self._log_changed(
@@ -310,9 +318,9 @@ class DispatcherLoop:
             )
             return False
         if unclaimed_intents:
-            newest = max(unclaimed_intents, key=lambda i: i.created_at)
+            selected = self._select_explore_intent(unclaimed_intents, metadata)
             export_yaml = self.client.export_project(summary.id)
-            return self._dispatch_explore(project, export_yaml, newest)
+            return self._dispatch_explore(project, export_yaml, selected)
         if project.project.reason is not None:
             self._log_changed(
                 f"{skip_scope}:reason_claimed",
@@ -324,10 +332,16 @@ class DispatcherLoop:
             return False
         reason_trigger = self._reason_trigger(project)
         if reason_trigger is None:
+            if self.config.tasks.observe.enabled:
+                export_yaml = self.client.export_project(summary.id)
+                if self._try_dispatch_observe_after_high_priority(project, export_yaml, metadata):
+                    return True
+            else:
+                self._clear_log_state(f"project:{summary.id}:worker:observe")
             self._log_changed(
                 f"{skip_scope}:graph_unchanged",
                 logging.DEBUG,
-                "skip reason project=%s because reason state unchanged facts=%s hints=%s open_intents=%s intents=%s",
+                "skip reason/observe project=%s because reason state unchanged and observe is not due facts=%s hints=%s open_intents=%s intents=%s",
                 summary.id,
                 len(project.facts),
                 len(project.hints),
@@ -336,7 +350,21 @@ class DispatcherLoop:
             )
             return False
         export_yaml = self.client.export_project(summary.id)
-        return self._dispatch_reason(project, export_yaml, reason_trigger)
+        if self._dispatch_reason(project, export_yaml, reason_trigger):
+            return True
+        return False
+
+    def _try_dispatch_observe_after_high_priority(
+        self,
+        project: ProjectDetail,
+        export_yaml: str,
+        metadata: ProjectMetadata,
+    ) -> bool:
+        observe_context = self._build_observe_context(project, export_yaml, metadata)
+        if observe_context is None:
+            return False
+        timeline, recent_runs, digest = observe_context
+        return self._dispatch_observe(project, export_yaml, timeline, metadata, recent_runs, digest)
 
     def _dispatch_initial_project(self, project: ProjectDetail) -> bool:
         intent = self._get_bootstrap_intent(project)
@@ -545,6 +573,53 @@ class DispatcherLoop:
         LOG.info("dispatched explore project=%s intent=%s worker=%s", project.project.id, intent.id, worker.name)
         return True
 
+    def _dispatch_observe(
+        self,
+        project: ProjectDetail,
+        export_yaml: str,
+        timeline: str,
+        metadata: ProjectMetadata,
+        recent_runs: list[dict],
+        digest: str,
+    ) -> bool:
+        selection = self._select_worker(project.project.id, "observe")
+        worker = selection.worker
+        if worker is None:
+            self._log_changed(
+                f"project:{project.project.id}:worker:observe",
+                logging.INFO,
+                "no worker available for observe project=%s blocked_busy=%s blocked_unhealthy=%s blocked_rejected=%s",
+                project.project.id,
+                selection.blocked_busy,
+                selection.blocked_unhealthy,
+                selection.blocked_rejected,
+            )
+            return False
+        self._clear_log_state(f"project:{project.project.id}:worker:observe")
+        try:
+            future = self.executor.submit(
+                run_observe_task,
+                self.config,
+                self.client,
+                self.runtime_manager,
+                project,
+                export_yaml,
+                timeline,
+                metadata,
+                recent_runs,
+                digest,
+                worker,
+                cancellation := TaskCancellation(),
+            )
+        except Exception:
+            LOG.exception("failed to submit observe task project=%s worker=%s", project.project.id, worker.name)
+            return False
+        self.futures[future] = RunningTask(project.project.id, "observe", worker.name, cancellation, intent_id=None)
+        self.runtime_project_ids.add(project.project.id)
+        self._clear_project_log_state(project.project.id)
+        LOG.info("dispatched observe project=%s worker=%s", project.project.id, worker.name)
+        return True
+
     def _select_worker(self, project_id: str, task_type: str) -> WorkerSelection:
         now = time.time()
         candidates: list[WorkerConfig] = []
@@ -641,12 +716,86 @@ class DispatcherLoop:
             if task.project_id == project_id and task.task_type == "explore" and task.intent_id is not None
         }
 
+    def _project_has_running_observe(self, project_id: str) -> bool:
+        return any(task.project_id == project_id and task.task_type == "observe" for task in self.futures.values())
+
     def _running_project_count(self, summaries: list[ProjectSummary]) -> int:
         active_ids = {summary.id for summary in summaries if summary.status == "active"}
         return len(self.runtime_project_ids & active_ids)
 
     def _project_open_intent_count(self, project: ProjectDetail) -> int:
         return sum(1 for intent in project.intents if intent.to is None)
+
+    def _intent_dispatchable(self, intent: Intent, metadata: ProjectMetadata) -> bool:
+        intent_meta = metadata.intents.get(intent.id)
+        return intent_meta is None or intent_meta.policy_status == "active"
+
+    def _select_explore_intent(self, intents: list[Intent], metadata: ProjectMetadata) -> Intent:
+        return max(
+            intents,
+            key=lambda intent: (
+                metadata.intents.get(intent.id).priority if metadata.intents.get(intent.id) is not None else 0,
+                intent.created_at,
+                intent.id,
+            ),
+        )
+
+    def _build_observe_context(
+        self,
+        project: ProjectDetail,
+        export_yaml: str,
+        metadata: ProjectMetadata,
+    ) -> tuple[str, list[dict], str] | None:
+        if not self.config.tasks.observe.enabled:
+            return None
+        if self._project_has_running_observe(project.project.id):
+            self._log_changed(
+                f"project:{project.project.id}:skip:observe_running",
+                logging.DEBUG,
+                "skip observe project=%s because observe task is already running locally",
+                project.project.id,
+            )
+            return None
+        last_observed_at = self._parse_observer_timestamp(metadata.observer.last_observed_at)
+        if last_observed_at is not None:
+            elapsed = (datetime.now(timezone.utc) - last_observed_at).total_seconds()
+            if elapsed < self.config.tasks.observe.min_interval_seconds:
+                self._log_changed(
+                    f"project:{project.project.id}:skip:observe_interval",
+                    logging.DEBUG,
+                    "skip observe project=%s because min interval has not elapsed elapsed=%.1fs required=%ss",
+                    project.project.id,
+                    elapsed,
+                    self.config.tasks.observe.min_interval_seconds,
+                )
+                return None
+        recent_runs = read_recent_worker_runs(
+            self.config.execution.work_dir,
+            project.project.id,
+            self.config.tasks.observe.recent_run_limit,
+        )
+        digest = build_observe_digest(project, export_yaml, metadata, recent_runs)
+        if digest == metadata.observer.last_digest:
+            self._log_changed(
+                f"project:{project.project.id}:skip:observe_digest",
+                logging.DEBUG,
+                "skip observe project=%s because graph/run digest is unchanged",
+                project.project.id,
+            )
+            return None
+        timeline = self.client.export_timeline(project.project.id)
+        return timeline, recent_runs, digest
+
+    def _parse_observer_timestamp(self, value: str | None) -> datetime | None:
+        if not value:
+            return None
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
 
     def _is_bootstrap_intent(self, intent: Intent) -> bool:
         return (

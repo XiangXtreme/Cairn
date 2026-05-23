@@ -4,7 +4,12 @@ from datetime import datetime
 import yaml
 
 from cairn.server.db import get_conn
-from cairn.server.services import expire_reason_leases, expire_workers, get_project_or_404
+from cairn.server.services import (
+    build_project_metadata,
+    expire_reason_leases,
+    expire_workers,
+    get_project_or_404,
+)
 
 router = APIRouter(tags=["export"])
 
@@ -49,6 +54,7 @@ def _load_project_data(conn, project_id: str):
 
 def _export_yaml(conn, project_id: str) -> str:
     proj, facts, hints, intents, sources_by_intent = _load_project_data(conn, project_id)
+    metadata = build_project_metadata(conn, project_id)
 
     origin_desc = ""
     goal_desc = ""
@@ -65,6 +71,12 @@ def _export_yaml(conn, project_id: str) -> str:
             "goal": goal_desc,
         }
     }
+    if metadata.summary.content:
+        data["project"]["summary"] = {
+            "content": metadata.summary.content,
+            "source": metadata.summary.source,
+            "updated_at": format_export_timestamp(metadata.summary.updated_at),
+        }
 
     if hints:
         data["hints"] = [
@@ -76,11 +88,28 @@ def _export_yaml(conn, project_id: str) -> str:
             for h in hints
         ]
 
-    data["facts"] = [{"id": f["id"], "description": f["description"]} for f in facts]
+    fact_list = []
+    for f in facts:
+        entry: dict = {"id": f["id"], "description": f["description"]}
+        fact_meta = metadata.facts.get(f["id"])
+        if fact_meta is not None:
+            meta_entry: dict = {
+                "kind": fact_meta.kind,
+                "tags": fact_meta.tags,
+                "summary": fact_meta.summary,
+                "source": fact_meta.source,
+                "updated_at": format_export_timestamp(fact_meta.updated_at),
+            }
+            if fact_meta.confidence is not None:
+                meta_entry["confidence"] = fact_meta.confidence
+            entry["metadata"] = {key: value for key, value in meta_entry.items() if value not in ("", [], None)}
+        fact_list.append(entry)
+    data["facts"] = fact_list
 
     intent_list = []
     for i in intents:
         entry: dict = {
+            "id": i["id"],
             "from": sources_by_intent.get(i["id"], []),
             "to": i["to_fact_id"],
             "description": i["description"],
@@ -89,6 +118,16 @@ def _export_yaml(conn, project_id: str) -> str:
             "created_at": format_export_timestamp(i["created_at"]),
             "concluded_at": format_export_timestamp(i["concluded_at"]),
         }
+        intent_meta = metadata.intents.get(i["id"])
+        if intent_meta is not None:
+            meta_entry = {
+                "priority": intent_meta.priority,
+                "policy_status": intent_meta.policy_status,
+                "tags": intent_meta.tags,
+                "summary": intent_meta.summary,
+                "updated_at": format_export_timestamp(intent_meta.updated_at),
+            }
+            entry["metadata"] = {key: value for key, value in meta_entry.items() if value not in ("", [], None)}
         intent_list.append(entry)
 
     if intent_list:

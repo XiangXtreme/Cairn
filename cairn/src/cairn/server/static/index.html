@@ -738,308 +738,327 @@
         </div>
       </section>
 
-      <section x-show="settingsSection === 'workers'" class="rounded-3xl border border-slate-200/70 bg-white p-5 shadow-sm">
-        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          <div>
-            <div class="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Agent</div>
-            <h3 class="mt-1 text-lg font-semibold tracking-tight text-slate-800">Worker 池</h3>
-            <p class="mt-1 text-sm text-slate-500">选择 Cairn 可使用的 Agent，绑定 Provider，并调整任务覆盖范围与优先级。</p>
+      <section x-show="settingsSection === 'workers'" class="overflow-hidden rounded-3xl border border-slate-200/70 bg-white shadow-sm">
+        <div class="border-b border-slate-200/80 px-5 py-5 lg:px-8">
+          <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div class="min-w-0">
+              <div class="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Agent</div>
+              <h3 class="mt-1 text-2xl font-semibold tracking-tight text-slate-900">Worker 池</h3>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-500">选择 Cairn 可使用的 Agent，绑定 Provider，并调整任务覆盖范围与优先级。</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <button @click="loadDispatchSettings()" class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition">重新加载</button>
+              <button @click="saveDispatchSettings()" :disabled="isSavingDispatchSettings || !!dispatchLoadError || !dispatchSettingsMeta.writable" class="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 transition shadow-sm disabled:opacity-40 disabled:cursor-not-allowed">
+                <span x-text="isSavingDispatchSettings ? '保存中...' : '保存 Worker 配置'"></span>
+              </button>
+              <button @click="addDispatchWorker()" class="rounded-2xl bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 transition shadow-sm shadow-brand-200">新增 Worker</button>
+            </div>
           </div>
-          <div class="flex items-center gap-2">
-            <button @click="loadDispatchSettings()" class="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition">重新加载</button>
-            <button @click="saveDispatchSettings()" :disabled="isSavingDispatchSettings || !!dispatchLoadError || !dispatchSettingsMeta.writable" class="rounded-2xl bg-slate-900 px-3.5 py-2 text-sm font-medium text-white hover:bg-slate-800 transition shadow-sm disabled:opacity-40 disabled:cursor-not-allowed">
-              <span x-text="isSavingDispatchSettings ? '保存中...' : '保存 Worker 配置'"></span>
-            </button>
-            <button @click="addDispatchWorker()" class="rounded-2xl bg-brand-500 px-3.5 py-2 text-sm font-medium text-white hover:bg-brand-600 transition shadow-sm shadow-brand-200">新增 Worker</button>
-          </div>
+
+          <template x-if="dispatchLoadError">
+            <div class="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700" x-text="dispatchLoadError"></div>
+          </template>
         </div>
 
-        <template x-if="dispatchLoadError">
-          <div class="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700" x-text="dispatchLoadError"></div>
-        </template>
-
-        <div class="mt-5 grid grid-cols-1 2xl:grid-cols-2 gap-4">
+        <div class="space-y-5 px-5 py-5 lg:px-8">
           <template x-for="(worker, idx) in dispatchForm.workers" :key="worker.source_name || `${worker.type}-${idx}`">
-            <article class="rounded-3xl border border-slate-200 bg-slate-50/70 p-4 shadow-sm transition"
+            <article class="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm transition"
               :class="worker.enabled === false ? 'opacity-60' : ''">
-              <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0">
+              <div class="border-b border-slate-200/80 bg-slate-50/80 px-4 py-4 lg:px-6">
+                <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                  <div class="min-w-0 space-y-3">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span class="rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]"
+                        :class="dispatchWorkerTypeClass(worker.type)"
+                        x-text="worker.type"></span>
+                      <span class="rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]"
+                        :class="worker.enabled === false ? 'bg-slate-200 text-slate-500' : 'bg-teal-50 text-teal-700 border border-teal-200'"
+                        x-text="worker.enabled === false ? '已禁用' : '启用中'"></span>
+                      <span class="text-xs text-slate-400" x-text="worker.source_name && worker.source_name !== worker.name ? `来自 ${worker.source_name}` : '新 Worker'"></span>
+                    </div>
+                    <div class="min-w-0">
+                      <div class="truncate text-base font-semibold text-slate-900" x-text="worker.name || '未命名 Worker'"></div>
+                      <div class="mt-1 text-xs text-slate-500" x-text="workerBindingSummary(worker).providerDetail"></div>
+                    </div>
+                  </div>
+                  <div class="flex shrink-0 flex-wrap items-center gap-2">
+                    <button @click="testWorkerHealthcheck(worker)"
+                      :disabled="worker.is_testing_healthcheck || worker.type === 'mock'"
+                      class="rounded-xl border border-brand-200 bg-white px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50 transition disabled:opacity-40 disabled:cursor-not-allowed">
+                      <span x-text="worker.is_testing_healthcheck ? '测试中...' : '测试模型'"></span>
+                    </button>
+                    <button @click="toggleDispatchWorkerEnabled(worker)"
+                      class="rounded-xl border bg-white px-3 py-2 text-sm font-medium transition"
+                      :class="worker.enabled === false ? 'border-teal-200 text-teal-700 hover:bg-teal-50' : 'border-slate-200 text-slate-600 hover:bg-slate-50'">
+                      <span x-text="worker.enabled === false ? '启用' : '禁用'"></span>
+                    </button>
+                    <button @click="removeDispatchWorker(idx)" class="rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 transition">移除</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="px-4 py-5 lg:px-6">
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-12">
+                  <label class="block xl:col-span-3">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">Worker 名称</span>
+                    <input x-model="worker.name" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                  </label>
+                  <label class="block xl:col-span-2">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">类型</span>
+                    <select x-model="worker.type" @change="onDispatchWorkerTypeChange(worker)" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                      <option value="claudecode">Claude Code</option>
+                      <option value="codex">Codex</option>
+                      <option value="pi">Pi</option>
+                      <option value="mock">Mock</option>
+                    </select>
+                  </label>
+                  <label class="block xl:col-span-3">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">Provider 绑定</span>
+                    <select x-model="worker.provider_id" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition" :disabled="worker.provider_supported === false || worker.type === 'mock'">
+                      <option value="">未绑定</option>
+                      <template x-for="provider in dispatchForm.providers.filter((item) => item.kind === worker.type)" :key="provider.id">
+                        <option :value="provider.id" x-text="provider.name || provider.id"></option>
+                      </template>
+                    </select>
+                  </label>
+                  <label class="block xl:col-span-2">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">并发上限</span>
+                    <input type="number" x-model.number="worker.max_running" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                  </label>
+                  <label class="block xl:col-span-2">
+                    <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">优先级</span>
+                    <input type="number" x-model.number="worker.priority" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                  </label>
+                </div>
+
+                <div class="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/80">
+                  <div class="grid grid-cols-1 divide-y divide-slate-200 md:grid-cols-3 md:divide-x md:divide-y-0">
+                    <div class="px-4 py-3">
+                      <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">Provider 状态</div>
+                      <div class="mt-1 text-sm font-medium text-slate-800" x-text="workerBindingSummary(worker).provider"></div>
+                      <div class="mt-1 text-xs leading-5 text-slate-500" x-text="workerBindingSummary(worker).providerDetail"></div>
+                    </div>
+                    <div class="px-4 py-3">
+                      <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">MCP 绑定</div>
+                      <div class="mt-1 text-sm font-medium text-slate-800" x-text="workerBindingSummary(worker).mcp"></div>
+                      <div class="mt-1 text-xs leading-5 text-slate-500" x-text="workerBindingSummary(worker).mcpDetail"></div>
+                    </div>
+                    <div class="px-4 py-3">
+                      <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">客户端启用</div>
+                      <div class="mt-1 text-sm font-medium text-slate-800" x-text="workerBindingSummary(worker).skill"></div>
+                      <div class="mt-1 text-xs leading-5 text-slate-500" x-text="workerBindingSummary(worker).skillDetail"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="mt-5 rounded-2xl border px-4 py-3"
+                  x-show="worker.healthcheck"
+                  :class="worker.healthcheck?.ok ? 'border-emerald-200 bg-emerald-50/70' : 'border-rose-200 bg-rose-50/70'">
                   <div class="flex flex-wrap items-center gap-2">
-                    <span class="rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]"
-                      :class="dispatchWorkerTypeClass(worker.type)"
-                      x-text="worker.type"></span>
-                    <span class="rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]"
-                      :class="worker.enabled === false ? 'bg-slate-200 text-slate-500' : 'bg-teal-50 text-teal-700 border border-teal-200'"
-                      x-text="worker.enabled === false ? '已禁用' : '启用中'"></span>
-                    <span class="text-xs text-slate-400" x-text="worker.source_name && worker.source_name !== worker.name ? `来自 ${worker.source_name}` : '新 Worker'"></span>
+                    <span class="rounded-full px-2.5 py-1 text-[10px] font-semibold"
+                      :class="worker.healthcheck?.ok ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-rose-100 text-rose-700 border border-rose-200'"
+                      x-text="worker.healthcheck?.ok ? '连通成功' : '连通失败'"></span>
+                    <span class="text-xs text-slate-500" x-text="`耗时 ${worker.healthcheck?.duration_ms || 0} ms`"></span>
+                    <span class="text-xs text-slate-500" x-show="worker.healthcheck?.http_status" x-text="`HTTP ${worker.healthcheck?.http_status}`"></span>
+                    <span class="text-xs text-slate-500" x-text="`退出码 ${worker.healthcheck?.returncode}`"></span>
                   </div>
-                  <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <label class="block">
-                      <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">Worker 名称</span>
-                      <input x-model="worker.name" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
-                    </label>
-                    <label class="block">
-                      <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">类型</span>
-                      <select x-model="worker.type" @change="onDispatchWorkerTypeChange(worker)" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
-                        <option value="claudecode">Claude Code</option>
-                        <option value="codex">Codex</option>
-                        <option value="pi">Pi</option>
-                        <option value="mock">Mock</option>
-                      </select>
-                    </label>
-                  </div>
-                </div>
-                <div class="flex shrink-0 items-center gap-2">
-                  <button @click="testWorkerHealthcheck(worker)"
-                    :disabled="worker.is_testing_healthcheck || worker.type === 'mock'"
-                    class="rounded-xl border border-brand-200 px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50 transition disabled:opacity-40 disabled:cursor-not-allowed">
-                    <span x-text="worker.is_testing_healthcheck ? '测试中...' : '测试模型'"></span>
-                  </button>
-                  <button @click="toggleDispatchWorkerEnabled(worker)"
-                    class="rounded-xl border px-3 py-2 text-sm font-medium transition"
-                    :class="worker.enabled === false ? 'border-teal-200 text-teal-700 hover:bg-teal-50' : 'border-slate-200 text-slate-600 hover:bg-slate-50'">
-                    <span x-text="worker.enabled === false ? '启用' : '禁用'"></span>
-                  </button>
-                  <button @click="removeDispatchWorker(idx)" class="rounded-xl border border-rose-200 px-3 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 transition">移除</button>
-                </div>
-              </div>
-
-              <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-                <label class="block">
-                  <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">Provider 绑定</span>
-                  <select x-model="worker.provider_id" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition" :disabled="worker.provider_supported === false || worker.type === 'mock'">
-                    <option value="">未绑定</option>
-                    <template x-for="provider in dispatchForm.providers.filter((item) => item.kind === worker.type)" :key="provider.id">
-                      <option :value="provider.id" x-text="provider.name || provider.id"></option>
-                    </template>
-                  </select>
-                </label>
-                <label class="block">
-                  <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">并发上限</span>
-                  <input type="number" x-model.number="worker.max_running" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
-                </label>
-                <label class="block">
-                  <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">优先级</span>
-                  <input type="number" x-model.number="worker.priority" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
-                </label>
-              </div>
-
-              <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                  <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">Provider 状态</div>
-                  <div class="mt-1 text-sm font-medium text-slate-800" x-text="workerBindingSummary(worker).provider"></div>
-                  <div class="mt-1 text-xs text-slate-500" x-text="workerBindingSummary(worker).providerDetail"></div>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                  <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">MCP 绑定</div>
-                  <div class="mt-1 text-sm font-medium text-slate-800" x-text="workerBindingSummary(worker).mcp"></div>
-                  <div class="mt-1 text-xs text-slate-500" x-text="workerBindingSummary(worker).mcpDetail"></div>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                  <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">客户端启用</div>
-                  <div class="mt-1 text-sm font-medium text-slate-800" x-text="workerBindingSummary(worker).skill"></div>
-                  <div class="mt-1 text-xs text-slate-500" x-text="workerBindingSummary(worker).skillDetail"></div>
-                </div>
-              </div>
-
-              <div class="mt-4 rounded-2xl border px-4 py-3"
-                x-show="worker.healthcheck"
-                :class="worker.healthcheck?.ok ? 'border-emerald-200 bg-emerald-50/70' : 'border-rose-200 bg-rose-50/70'">
-                <div class="flex flex-wrap items-center gap-2">
-                  <span class="rounded-full px-2.5 py-1 text-[10px] font-semibold"
-                    :class="worker.healthcheck?.ok ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-rose-100 text-rose-700 border border-rose-200'"
-                    x-text="worker.healthcheck?.ok ? '连通成功' : '连通失败'"></span>
-                  <span class="text-xs text-slate-500" x-text="`耗时 ${worker.healthcheck?.duration_ms || 0} ms`"></span>
-                  <span class="text-xs text-slate-500" x-show="worker.healthcheck?.http_status" x-text="`HTTP ${worker.healthcheck?.http_status}`"></span>
-                  <span class="text-xs text-slate-500" x-text="`退出码 ${worker.healthcheck?.returncode}`"></span>
-                </div>
-                <template x-if="worker.healthcheck?.command">
-                  <div class="mt-3">
-                    <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">测试命令</div>
-                    <pre class="mt-1 overflow-x-auto rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-[11px] leading-5 text-slate-600" x-text="worker.healthcheck.command"></pre>
-                  </div>
-                </template>
-                <template x-if="worker.healthcheck?.response_preview">
-                  <div class="mt-3">
-                    <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">响应预览</div>
-                    <div class="mt-1 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-xs leading-5 text-slate-700 break-all" x-text="worker.healthcheck.response_preview"></div>
-                  </div>
-                </template>
-                <template x-if="worker.healthcheck?.stderr_preview">
-                  <div class="mt-3">
-                    <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">错误预览</div>
-                    <div class="mt-1 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-xs leading-5 text-slate-700 break-all" x-text="worker.healthcheck.stderr_preview"></div>
-                  </div>
-                </template>
-              </div>
-
-              <div class="mt-4 rounded-2xl border border-slate-200 bg-white/80 p-4" x-show="worker.type !== 'mock'">
-                <div class="flex items-start justify-between gap-3">
-                  <div>
-                    <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">Provider 摘要</div>
-                    <p class="mt-1 text-xs text-slate-500">绑定 Provider 时，模型源与鉴权信息以 Provider 为主；未绑定时使用 Worker 兼容字段。</p>
-                  </div>
-                  <button type="button" @click="worker.show_legacy_provider = !worker.show_legacy_provider" class="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition">
-                    <span x-text="worker.show_legacy_provider ? '收起兼容字段' : '高级设置'"></span>
-                  </button>
-                </div>
-
-                <template x-if="selectedProviderForWorker(worker)">
-                  <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div class="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
-                      <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">Provider</div>
-                      <div class="mt-1 text-sm font-medium text-slate-800" x-text="selectedProviderForWorker(worker).name || selectedProviderForWorker(worker).id"></div>
-                      <div class="mt-1 text-xs text-slate-500" x-text="selectedProviderForWorker(worker).id"></div>
+                  <template x-if="worker.healthcheck?.command">
+                    <div class="mt-3">
+                      <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">测试命令</div>
+                      <pre class="mt-1 overflow-x-auto rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-[11px] leading-5 text-slate-600" x-text="worker.healthcheck.command"></pre>
                     </div>
-                    <div class="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
-                      <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">模型</div>
-                      <div class="mt-1 text-sm font-medium text-slate-800 break-all" x-text="selectedProviderForWorker(worker).model || '未设置'"></div>
+                  </template>
+                  <template x-if="worker.healthcheck?.response_preview">
+                    <div class="mt-3">
+                      <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">响应预览</div>
+                      <div class="mt-1 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-xs leading-5 text-slate-700 break-all" x-text="worker.healthcheck.response_preview"></div>
                     </div>
-                    <div class="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 md:col-span-2">
-                      <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">Base URL</div>
-                      <div class="mt-1 text-sm font-medium text-slate-800 break-all" x-text="selectedProviderForWorker(worker).base_url || '未设置'"></div>
-                    </div>
-                  </div>
-                </template>
-
-                <template x-if="!selectedProviderForWorker(worker)">
-                  <div class="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
-                    当前没有绑定 Provider，将使用下面的兼容字段作为直接配置。
-                  </div>
-                </template>
-
-                <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3" x-show="worker.show_legacy_provider || !selectedProviderForWorker(worker)">
-                  <label class="block">
-                    <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">兼容模型</span>
-                    <input x-model="worker.model" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition" :disabled="worker.type === 'mock'">
-                  </label>
-                  <label class="block">
-                    <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">兼容 Base URL</span>
-                    <input x-model="worker.base_url" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition" :disabled="worker.type === 'mock'">
-                  </label>
-                  <label class="block">
-                    <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">兼容 API Key / Token</span>
-                    <input x-model="worker.auth_token" placeholder="留空则保留现有 key" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
-                    <p class="mt-1 text-[11px] text-slate-400" x-text="worker.has_auth_token ? '已存在 key，留空会保持不变。' : '这个 Worker 还没有保存 key。'"></p>
-                  </label>
-                  <template x-if="worker.type === 'pi'">
-                    <div class="grid grid-cols-1 gap-3">
-                      <label class="block">
-                        <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">兼容 Provider API</span>
-                        <input x-model="worker.provider_api" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
-                      </label>
-                      <label class="block">
-                        <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">兼容上下文窗口</span>
-                        <input type="number" x-model.number="worker.context_window" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
-                      </label>
+                  </template>
+                  <template x-if="worker.healthcheck?.stderr_preview">
+                    <div class="mt-3">
+                      <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">错误预览</div>
+                      <div class="mt-1 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-xs leading-5 text-slate-700 break-all" x-text="worker.healthcheck.stderr_preview"></div>
                     </div>
                   </template>
                 </div>
-              </div>
 
-              <div class="mt-4 grid grid-cols-1 xl:grid-cols-[1.3fr_1fr] gap-4">
-                <div class="rounded-2xl border border-slate-200 bg-white/80 p-4">
-                  <div class="flex items-center justify-between gap-2">
+                <div class="mt-5 border-t border-slate-200 pt-5" x-show="worker.type !== 'mock'">
+                  <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div>
-                      <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">额外环境变量</div>
-                      <p class="mt-1 text-xs text-slate-500">用于补充 provider 专有参数，不覆盖模型、Base URL、Key 这类主字段。</p>
+                      <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">Provider 摘要</div>
+                      <p class="mt-1 text-xs leading-5 text-slate-500">绑定 Provider 时，模型源与鉴权信息以 Provider 为主；未绑定时使用 Worker 兼容字段。</p>
                     </div>
-                    <button type="button" @click="addWorkerExtraEnv(worker)" class="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition">新增变量</button>
+                    <button type="button" @click="worker.show_legacy_provider = !worker.show_legacy_provider" class="w-fit rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition">
+                      <span x-text="worker.show_legacy_provider ? '收起兼容字段' : '高级设置'"></span>
+                    </button>
                   </div>
-                  <div class="mt-3 space-y-2">
-                    <template x-for="(row, envIndex) in workerExtraEnvEntries(worker)" :key="`${row.key}-${envIndex}`">
-                      <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
-                        <input :value="row.key" @input="updateWorkerExtraEnvKey(worker, row.key, $event.target.value)" placeholder="KEY" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
-                        <input :value="row.value" @input="updateWorkerExtraEnvValue(worker, row.key, $event.target.value)" placeholder="VALUE" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
-                        <button type="button" @click="removeWorkerExtraEnv(worker, row.key)" class="rounded-xl border border-rose-200 px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 transition">删除</button>
+
+                  <template x-if="selectedProviderForWorker(worker)">
+                    <div class="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/80">
+                      <div class="grid grid-cols-1 divide-y divide-slate-200 md:grid-cols-[minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,1.2fr)] md:divide-x md:divide-y-0">
+                        <div class="px-4 py-3">
+                          <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">Provider</div>
+                          <div class="mt-1 text-sm font-medium text-slate-800" x-text="selectedProviderForWorker(worker).name || selectedProviderForWorker(worker).id"></div>
+                          <div class="mt-1 break-all text-xs text-slate-500" x-text="selectedProviderForWorker(worker).id"></div>
+                        </div>
+                        <div class="px-4 py-3">
+                          <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">模型</div>
+                          <div class="mt-1 break-all text-sm font-medium text-slate-800" x-text="selectedProviderForWorker(worker).model || '未设置'"></div>
+                        </div>
+                        <div class="px-4 py-3">
+                          <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">Base URL</div>
+                          <div class="mt-1 break-all text-sm font-medium text-slate-800" x-text="selectedProviderForWorker(worker).base_url || '未设置'"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+
+                  <template x-if="!selectedProviderForWorker(worker)">
+                    <div class="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
+                      当前没有绑定 Provider，将使用下面的兼容字段作为直接配置。
+                    </div>
+                  </template>
+
+                  <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3" x-show="worker.show_legacy_provider || !selectedProviderForWorker(worker)">
+                    <label class="block">
+                      <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">兼容模型</span>
+                      <input x-model="worker.model" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition" :disabled="worker.type === 'mock'">
+                    </label>
+                    <label class="block">
+                      <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">兼容 Base URL</span>
+                      <input x-model="worker.base_url" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition" :disabled="worker.type === 'mock'">
+                    </label>
+                    <label class="block">
+                      <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">兼容 API Key / Token</span>
+                      <input x-model="worker.auth_token" placeholder="留空则保留现有 key" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                      <p class="mt-1 text-[11px] text-slate-400" x-text="worker.has_auth_token ? '已存在 key，留空会保持不变。' : '这个 Worker 还没有保存 key。'"></p>
+                    </label>
+                    <template x-if="worker.type === 'pi'">
+                      <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:col-span-3">
+                        <label class="block">
+                          <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">兼容 Provider API</span>
+                          <input x-model="worker.provider_api" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                        </label>
+                        <label class="block">
+                          <span class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">兼容上下文窗口</span>
+                          <input type="number" x-model.number="worker.context_window" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                        </label>
                       </div>
                     </template>
-                    <template x-if="workerExtraEnvEntries(worker).length === 0">
-                      <div class="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-400">当前没有额外环境变量。</div>
-                    </template>
                   </div>
                 </div>
 
-                <div class="rounded-2xl border border-slate-200 bg-white/80 p-4">
-                  <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">能力绑定</div>
-                  <div class="mt-3">
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="text-sm font-medium text-slate-700">MCP</span>
-                      <span class="rounded-full px-2.5 py-1 text-[10px] font-semibold"
-                        :class="worker.mcp_supported ? 'bg-teal-50 text-teal-700 border border-teal-200' : 'bg-slate-100 text-slate-500 border border-slate-200'"
-                        x-text="worker.mcp_supported ? '已接入' : '未接入'"></span>
+                <div class="mt-5 grid grid-cols-1 gap-5 border-t border-slate-200 pt-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+                  <div class="min-w-0">
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">额外环境变量</div>
+                        <p class="mt-1 text-xs leading-5 text-slate-500">用于补充 provider 专有参数，不覆盖模型、Base URL、Key 这类主字段。</p>
+                      </div>
+                      <button type="button" @click="addWorkerExtraEnv(worker)" class="w-fit rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition">新增变量</button>
                     </div>
-                    <div class="mt-2 flex flex-wrap gap-2" x-show="worker.mcp_supported">
-                      <template x-for="server in dispatchForm.mcp_servers" :key="server.id">
-                        <button type="button" @click="toggleWorkerMcp(worker, server.id)"
-                          class="rounded-full border px-3 py-1.5 text-xs font-medium transition"
-                          :class="(worker.mcp_server_ids || []).includes(server.id)
-                            ? 'border-brand-200 bg-brand-50 text-brand-700'
-                            : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'">
-                          <span x-text="server.name || server.id"></span>
-                        </button>
+                    <div class="mt-3 space-y-2">
+                      <template x-for="(row, envIndex) in workerExtraEnvEntries(worker)" :key="`${row.key}-${envIndex}`">
+                        <div class="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_auto]">
+                          <input :value="row.key" @input="updateWorkerExtraEnvKey(worker, row.key, $event.target.value)" placeholder="KEY" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                          <input :value="row.value" @input="updateWorkerExtraEnvValue(worker, row.key, $event.target.value)" placeholder="VALUE" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400 transition">
+                          <button type="button" @click="removeWorkerExtraEnv(worker, row.key)" class="rounded-xl border border-rose-200 px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 transition">删除</button>
+                        </div>
+                      </template>
+                      <template x-if="workerExtraEnvEntries(worker).length === 0">
+                        <div class="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-400">当前没有额外环境变量。</div>
                       </template>
                     </div>
-                    <p class="mt-2 text-xs text-slate-400" x-show="worker.mcp_supported && dispatchForm.mcp_servers.length === 0">还没有配置 MCP 资源。</p>
-                    <p class="mt-2 text-xs text-slate-400" x-show="!worker.mcp_supported" x-text="worker.type === 'pi' ? 'Pi 暂未接入 MCP 注入，当前先作为预留能力展示。' : '当前 Worker 类型暂不支持 MCP 注入。'"></p>
                   </div>
 
-                  <div class="mt-4">
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="text-sm font-medium text-slate-700">Skill</span>
-                      <span class="rounded-full px-2.5 py-1 text-[10px] font-semibold"
-                        :class="worker.skill_supported ? 'bg-teal-50 text-teal-700 border border-teal-200' : 'bg-slate-100 text-slate-500 border border-slate-200'"
-                        x-text="worker.skill_supported ? '已接入' : '预留中'"></span>
-                    </div>
-                    <div class="mt-2 flex flex-wrap gap-2" x-show="worker.skill_supported">
-                      <template x-for="skill in dispatchForm.skills" :key="skill.id">
-                        <button type="button" @click="toggleWorkerSkill(worker, skill.id)"
-                          class="rounded-full border px-3 py-1.5 text-xs font-medium transition"
-                          :class="(worker.skill_ids || []).includes(skill.id)
-                            ? 'border-brand-200 bg-brand-50 text-brand-700'
-                            : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'">
-                          <span x-text="skill.name || skill.id"></span>
-                        </button>
-                      </template>
-                    </div>
-                    <p class="mt-2 text-xs text-slate-400" x-show="worker.skill_supported && dispatchForm.skills.length === 0">还没有注册 Skill。</p>
-                    <p class="mt-2 text-xs text-slate-400" x-show="!worker.skill_supported" x-text="worker.type === 'pi' ? 'Pi 当前明确标记为 Skill 预留态，暂不自动注入。' : '当前 Worker 类型暂未接入 Skill 同步。'"></p>
-                  </div>
-                </div>
-              </div>
+                  <div class="min-w-0 space-y-5">
+                    <div>
+                      <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">能力绑定</div>
+                      <div class="mt-3 space-y-4">
+                        <div>
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="text-sm font-medium text-slate-700">MCP</span>
+                            <span class="rounded-full px-2.5 py-1 text-[10px] font-semibold"
+                              :class="worker.mcp_supported ? 'bg-teal-50 text-teal-700 border border-teal-200' : 'bg-slate-100 text-slate-500 border border-slate-200'"
+                              x-text="worker.mcp_supported ? '已接入' : '未接入'"></span>
+                          </div>
+                          <div class="mt-2 flex flex-wrap gap-2" x-show="worker.mcp_supported">
+                            <template x-for="server in dispatchForm.mcp_servers" :key="server.id">
+                              <button type="button" @click="toggleWorkerMcp(worker, server.id)"
+                                class="rounded-full border px-3 py-1.5 text-xs font-medium transition"
+                                :class="(worker.mcp_server_ids || []).includes(server.id)
+                                  ? 'border-brand-200 bg-brand-50 text-brand-700'
+                                  : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'">
+                                <span x-text="server.name || server.id"></span>
+                              </button>
+                            </template>
+                          </div>
+                          <p class="mt-2 text-xs text-slate-400" x-show="worker.mcp_supported && dispatchForm.mcp_servers.length === 0">还没有配置 MCP 资源。</p>
+                          <p class="mt-2 text-xs text-slate-400" x-show="!worker.mcp_supported" x-text="worker.type === 'pi' ? 'Pi 暂未接入 MCP 注入，当前先作为预留能力展示。' : '当前 Worker 类型暂不支持 MCP 注入。'"></p>
+                        </div>
 
-              <div class="mt-4">
-                <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">任务覆盖</div>
-                <div class="mt-2 flex flex-wrap gap-2">
-                  <template x-for="taskType in ['bootstrap', 'reason', 'explore']" :key="taskType">
-                    <button type="button" @click="toggleDispatchWorkerTask(worker, taskType)"
-                      class="rounded-full border px-3 py-1.5 text-xs font-medium transition"
-                      :class="worker.task_types.includes(taskType)
-                        ? 'border-brand-200 bg-brand-50 text-brand-700'
-                        : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'">
-                      <span x-text="taskTypeLabel(taskType)"></span>
-                    </button>
-                  </template>
+                        <div>
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="text-sm font-medium text-slate-700">Skill</span>
+                            <span class="rounded-full px-2.5 py-1 text-[10px] font-semibold"
+                              :class="worker.skill_supported ? 'bg-teal-50 text-teal-700 border border-teal-200' : 'bg-slate-100 text-slate-500 border border-slate-200'"
+                              x-text="worker.skill_supported ? '已接入' : '预留中'"></span>
+                          </div>
+                          <div class="mt-2 flex flex-wrap gap-2" x-show="worker.skill_supported">
+                            <template x-for="skill in dispatchForm.skills" :key="skill.id">
+                              <button type="button" @click="toggleWorkerSkill(worker, skill.id)"
+                                class="rounded-full border px-3 py-1.5 text-xs font-medium transition"
+                                :class="(worker.skill_ids || []).includes(skill.id)
+                                  ? 'border-brand-200 bg-brand-50 text-brand-700'
+                                  : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'">
+                                <span x-text="skill.name || skill.id"></span>
+                              </button>
+                            </template>
+                          </div>
+                          <p class="mt-2 text-xs text-slate-400" x-show="worker.skill_supported && dispatchForm.skills.length === 0">还没有注册 Skill。</p>
+                          <p class="mt-2 text-xs text-slate-400" x-show="!worker.skill_supported" x-text="worker.type === 'pi' ? 'Pi 当前明确标记为 Skill 预留态，暂不自动注入。' : '当前 Worker 类型暂未接入 Skill 同步。'"></p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="border-t border-slate-200 pt-5">
+                      <div class="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">任务覆盖</div>
+                      <div class="mt-2 flex flex-wrap gap-2">
+                        <template x-for="taskType in ['bootstrap', 'reason', 'explore', 'observe']" :key="taskType">
+                          <button type="button" @click="toggleDispatchWorkerTask(worker, taskType)"
+                            class="rounded-full border px-3 py-1.5 text-xs font-medium transition"
+                            :class="worker.task_types.includes(taskType)
+                              ? 'border-brand-200 bg-brand-50 text-brand-700'
+                              : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'">
+                            <span x-text="taskTypeLabel(taskType)"></span>
+                          </button>
+                        </template>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </article>
           </template>
+
+          <template x-if="dispatchForm.workers.length === 0">
+            <div class="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-5 py-10 text-center text-slate-400">
+              <p class="text-sm">还没有配置 Worker</p>
+              <p class="mt-1 text-xs">新增 Worker 后，调度器就可以选择它。</p>
+            </div>
+          </template>
         </div>
 
-        <template x-if="dispatchForm.workers.length === 0">
-          <div class="mt-5 rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-5 py-10 text-center text-slate-400">
-            <p class="text-sm">还没有配置 Worker</p>
-            <p class="mt-1 text-xs">新增 Worker 后，调度器就可以选择它。</p>
+        <div class="border-t border-slate-200/80 px-5 py-5 lg:px-8">
+          <div class="flex flex-col justify-between gap-4 rounded-[24px] border border-slate-200 bg-slate-50/80 px-5 py-4 lg:flex-row lg:items-center">
+            <div>
+              <div class="text-sm font-medium text-slate-800" x-text="dispatchSettingsMode === 'ui' ? '保存后会写入 UI 真源并重新编译 dispatch_ui.yaml。' : '保存后会更新当前 YAML 配置。'"></div>
+              <p class="mt-1 text-xs text-slate-400" x-text="dispatchSettingsMeta.writable ? '已启动的 Agent 继续使用旧配置，新任务会自动读取最新 Worker 设置。' : '当前配置源只读，暂时无法保存。'"></p>
+            </div>
+            <button @click="saveDispatchSettings()" :disabled="isSavingDispatchSettings || !!dispatchLoadError || !dispatchSettingsMeta.writable" class="shrink-0 rounded-2xl bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-800 transition disabled:opacity-40 disabled:cursor-not-allowed">
+              <span x-text="isSavingDispatchSettings ? '保存中...' : '保存 Worker 配置'"></span>
+            </button>
           </div>
-        </template>
-        <div class="mt-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 rounded-[24px] border border-slate-200 bg-slate-50/80 px-5 py-4">
-          <div>
-            <div class="text-sm font-medium text-slate-800" x-text="dispatchSettingsMode === 'ui' ? '保存后会写入 UI 真源并重新编译 dispatch_ui.yaml。' : '保存后会更新当前 YAML 配置。'"></div>
-            <p class="mt-1 text-xs text-slate-400" x-text="dispatchSettingsMeta.writable ? '已启动的 Agent 继续使用旧配置，新任务会自动读取最新 Worker 设置。' : '当前配置源只读，暂时无法保存。'"></p>
-          </div>
-          <button @click="saveDispatchSettings()" :disabled="isSavingDispatchSettings || !!dispatchLoadError || !dispatchSettingsMeta.writable" class="shrink-0 rounded-2xl bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-800 transition disabled:opacity-40 disabled:cursor-not-allowed">
-            <span x-text="isSavingDispatchSettings ? '保存中...' : '保存 Worker 配置'"></span>
-          </button>
         </div>
       </section>
 
@@ -2125,6 +2144,7 @@ function cairnApp() {
         bootstrap: { timeout: 300, conclude_timeout: 90 },
         reason: { timeout: 300, max_intents: 1, allow_unavailable_dispatch: false, unavailable_fact_limit: 2 },
         explore: { timeout: 300, conclude_timeout: 90 },
+        observe: { enabled: false, timeout: 300, min_interval_seconds: 60, recent_run_limit: 10, max_updates: 4 },
       },
       workers: [],
       providers: [],
@@ -2340,6 +2360,7 @@ function cairnApp() {
         bootstrap: '启动',
         reason: '推理',
         explore: '探索',
+        observe: '观察',
       };
       return labels[taskType] || taskType;
     },
@@ -2820,6 +2841,13 @@ function cairnApp() {
           timeout: Number(source.explore?.timeout || 300),
           conclude_timeout: Number(source.explore?.conclude_timeout || 90),
         },
+        observe: {
+          enabled: source.observe?.enabled === true,
+          timeout: Number(source.observe?.timeout || 300),
+          min_interval_seconds: Number(source.observe?.min_interval_seconds || 60),
+          recent_run_limit: Number(source.observe?.recent_run_limit || 10),
+          max_updates: Number(source.observe?.max_updates || 4),
+        },
       };
     },
 
@@ -2848,6 +2876,13 @@ function cairnApp() {
         explore: {
           timeout: normalized.explore.timeout,
           conclude_timeout: normalized.explore.conclude_timeout,
+        },
+        observe: {
+          enabled: normalized.observe.enabled,
+          timeout: normalized.observe.timeout,
+          min_interval_seconds: normalized.observe.min_interval_seconds,
+          recent_run_limit: normalized.observe.recent_run_limit,
+          max_updates: normalized.observe.max_updates,
         },
       };
     },
@@ -3082,7 +3117,7 @@ function cairnApp() {
       } else {
         next.add(taskType);
       }
-      worker.task_types = ['bootstrap', 'reason', 'explore'].filter((item) => next.has(item));
+      worker.task_types = ['bootstrap', 'reason', 'explore', 'observe'].filter((item) => next.has(item));
     },
 
     workerExtraEnvEntries(worker) {

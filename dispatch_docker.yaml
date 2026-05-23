@@ -18,6 +18,12 @@ tasks:
   explore:
     timeout: 300
     conclude_timeout: 90
+  observe:
+    enabled: false
+    timeout: 300
+    min_interval_seconds: 60
+    recent_run_limit: 10
+    max_updates: 4
 execution:
   backend: docker
   work_dir: .cairn-runtime

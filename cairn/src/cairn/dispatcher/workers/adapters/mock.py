@@ -111,6 +111,17 @@ if phase=="bootstrap_conclude":
         print(json.dumps({"accepted":True,"data":{"complete":{"description":"mock invalid payload"}}}, ensure_ascii=False))
     raise SystemExit(0)
 
+if phase=="observe":
+    if outcome=="update":
+        print(json.dumps({"accepted":True,"data":{"hint":{"content":"mock observer reviewed recent graph and run records"},"project_summary":{"content":"mock observer summary","source":"mock_observer"},"fact_metadata":[],"intent_metadata":[]}}, ensure_ascii=False))
+    elif outcome=="noop":
+        print(json.dumps({"accepted":True,"data":{}}, ensure_ascii=False))
+    elif outcome=="rejected":
+        print(json.dumps({"accepted":False,"reason":"mock_rejected"}, ensure_ascii=False))
+    else:
+        print(json.dumps({"accepted":True,"data":{"fact_metadata":"invalid"}} , ensure_ascii=False))
+    raise SystemExit(0)
+
 if outcome=="fact":
     label = prompt.get("intent_id") or phase
     print(json.dumps({"accepted":True,"data":{"description":f"mock fact for {label}"}} , ensure_ascii=False))

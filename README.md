@@ -151,6 +151,18 @@ uv run --project cairn cairn dispatch --config dispatch.yaml --startup-healthche
 
 Runtime files, prompt snapshots, and per-project working directories are written under `.cairn-runtime/` by default.
 
+### Optional Observer Layer
+
+Cairn can optionally run an `observe` task after higher-priority `reason` and `explore` work is idle. The observer reads the graph snapshot plus recent worker run records, then writes compact Hints, project summaries, and Fact/Intent metadata such as priority, status, tags, and failure boundaries.
+
+This layer is disabled in `dispatch.yaml` by default. To try it, copy or edit `dispatch_observer.yaml`, fill in the worker credentials, then run the dispatcher with that config:
+
+```bash
+uv run --project cairn cairn dispatch --config dispatch_observer.yaml
+```
+
+The observer keeps Cairn's core protocol unchanged: Facts, Intents, and Hints remain the coordination primitives; metadata is stored in side tables and exported into the YAML graph only when present.
+
 ### Docker Runtime
 
 Linux deployments can run Cairn Server and Dispatcher with Docker Compose while the Dispatcher starts one worker container per Cairn project.

@@ -10,6 +10,8 @@ from cairn.dispatcher.config import TaskType, WorkerType
 DispatchSettingsMode = Literal["file", "ui"]
 McpTransportType = Literal["stdio", "http"]
 ProviderKind = Literal["claudecode", "codex", "pi"]
+FactMetadataKind = Literal["fact", "evidence", "failure", "note", "hint"]
+IntentPolicyStatus = Literal["active", "paused", "stale"]
 
 
 class Settings(BaseModel):
@@ -43,10 +45,19 @@ class DispatchExploreTaskSettings(BaseModel):
     conclude_timeout: int = Field(gt=0)
 
 
+class DispatchObserveTaskSettings(BaseModel):
+    enabled: bool = False
+    timeout: int = Field(gt=0, default=300)
+    min_interval_seconds: int = Field(ge=0, default=60)
+    recent_run_limit: int = Field(ge=1, default=10)
+    max_updates: int = Field(ge=1, default=4)
+
+
 class DispatchTaskSettings(BaseModel):
     bootstrap: DispatchBootstrapTaskSettings
     reason: DispatchReasonTaskSettings
     explore: DispatchExploreTaskSettings
+    observe: DispatchObserveTaskSettings = Field(default_factory=DispatchObserveTaskSettings)
 
 
 class DispatchWorkerSettings(BaseModel):
@@ -336,6 +347,114 @@ class ProjectDetail(BaseModel):
     facts: list[Fact]
     intents: list[Intent]
     hints: list[Hint]
+
+
+class FactMetadata(BaseModel):
+    fact_id: str
+    kind: FactMetadataKind = "fact"
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    tags: list[str] = Field(default_factory=list)
+    summary: str = ""
+    source: str = ""
+    updated_at: str
+
+
+class IntentMetadata(BaseModel):
+    intent_id: str
+    priority: int = 0
+    policy_status: IntentPolicyStatus = "active"
+    tags: list[str] = Field(default_factory=list)
+    summary: str = ""
+    updated_at: str
+
+
+class ProjectSummaryMetadata(BaseModel):
+    content: str = ""
+    source: str = ""
+    updated_at: str | None = None
+
+
+class ObserverCheckpoint(BaseModel):
+    last_digest: str = ""
+    last_observed_at: str | None = None
+
+
+class ProjectMetadata(BaseModel):
+    project_id: str
+    summary: ProjectSummaryMetadata = Field(default_factory=ProjectSummaryMetadata)
+    facts: dict[str, FactMetadata] = Field(default_factory=dict)
+    intents: dict[str, IntentMetadata] = Field(default_factory=dict)
+    observer: ObserverCheckpoint = Field(default_factory=ObserverCheckpoint)
+
+
+class UpdateFactMetadataRequest(BaseModel):
+    kind: FactMetadataKind = "fact"
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    tags: list[str] = Field(default_factory=list)
+    summary: str = ""
+    source: str = ""
+
+    @field_validator("tags")
+    @classmethod
+    def normalize_tags(cls, value: list[str]) -> list[str]:
+        seen: set[str] = set()
+        cleaned: list[str] = []
+        for item in value:
+            text = str(item).strip()
+            if not text or text in seen:
+                continue
+            seen.add(text)
+            cleaned.append(text)
+        return cleaned
+
+    @field_validator("summary", "source")
+    @classmethod
+    def normalize_text(cls, value: str) -> str:
+        return value.strip()
+
+
+class UpdateIntentMetadataRequest(BaseModel):
+    priority: int = 0
+    policy_status: IntentPolicyStatus = "active"
+    tags: list[str] = Field(default_factory=list)
+    summary: str = ""
+
+    @field_validator("tags")
+    @classmethod
+    def normalize_tags(cls, value: list[str]) -> list[str]:
+        seen: set[str] = set()
+        cleaned: list[str] = []
+        for item in value:
+            text = str(item).strip()
+            if not text or text in seen:
+                continue
+            seen.add(text)
+            cleaned.append(text)
+        return cleaned
+
+    @field_validator("summary")
+    @classmethod
+    def normalize_summary(cls, value: str) -> str:
+        return value.strip()
+
+
+class UpdateProjectSummaryRequest(BaseModel):
+    content: str
+    source: str = ""
+
+    @field_validator("content", "source")
+    @classmethod
+    def normalize_text(cls, value: str) -> str:
+        return value.strip()
+
+
+class UpdateObserverCheckpointRequest(BaseModel):
+    last_digest: str
+
+    @field_validator("last_digest")
+    @classmethod
+    def normalize_digest(cls, value: str) -> str:
+        return value.strip()
 
 
 class CreateHintInline(BaseModel):

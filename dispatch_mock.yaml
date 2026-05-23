@@ -20,6 +20,12 @@ tasks:
   explore:
     timeout: 9
     conclude_timeout: 5
+  observe:
+    enabled: false
+    timeout: 5
+    min_interval_seconds: 3
+    recent_run_limit: 10
+    max_updates: 4
 
 execution:
   work_dir: ".cairn-runtime"
@@ -41,6 +47,7 @@ workers:
       MOCK_REASON: '{"delay":[2,6],"outcomes":{"complete":0.1,"intent":0.4,"noop":0.1,"rejected":0.1,"invalid_json":0.1,"invalid_payload":0.1,"command_fail":0.1}}'
       MOCK_EXPLORE_EXECUTE: '{"delay":[5,10],"outcomes":{"fact":0.6,"rejected":0.1,"invalid_json":0.1,"invalid_payload":0.1,"command_fail":0.1}}'
       MOCK_EXPLORE_CONCLUDE: '{"delay":[2,6],"outcomes":{"fact":0.6,"rejected":0.1,"invalid_json":0.1,"invalid_payload":0.1,"command_fail":0.1}}'
+      MOCK_OBSERVE: '{"delay":[1,3],"outcomes":{"update":0.6,"noop":0.2,"rejected":0.0,"invalid_json":0.1,"invalid_payload":0.1,"command_fail":0.0}}'
 
   - name: "mock-observer-2"
     type: "mock"
@@ -54,3 +61,4 @@ workers:
       MOCK_REASON: '{"delay":[2,6],"outcomes":{"complete":0.1,"intent":0.4,"noop":0.1,"rejected":0.1,"invalid_json":0.1,"invalid_payload":0.1,"command_fail":0.1}}'
       MOCK_EXPLORE_EXECUTE: '{"delay":[5,10],"outcomes":{"fact":0.6,"rejected":0.1,"invalid_json":0.1,"invalid_payload":0.1,"command_fail":0.1}}'
       MOCK_EXPLORE_CONCLUDE: '{"delay":[2,6],"outcomes":{"fact":0.6,"rejected":0.1,"invalid_json":0.1,"invalid_payload":0.1,"command_fail":0.1}}'
+      MOCK_OBSERVE: '{"delay":[1,3],"outcomes":{"update":0.6,"noop":0.2,"rejected":0.0,"invalid_json":0.1,"invalid_payload":0.1,"command_fail":0.0}}'

@@ -2,13 +2,27 @@ from __future__ import annotations
 
 import shutil
 import sqlite3
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import HTTPException
 
 from cairn.server.dispatch_settings import resolve_dispatch_config_path
-from cairn.server.models import Intent, ProjectMeta, ProjectReason
+from cairn.server.models import (
+    FactMetadata,
+    Intent,
+    IntentMetadata,
+    ObserverCheckpoint,
+    ProjectMeta,
+    ProjectMetadata,
+    ProjectReason,
+    ProjectSummaryMetadata,
+    UpdateFactMetadataRequest,
+    UpdateIntentMetadataRequest,
+    UpdateObserverCheckpointRequest,
+    UpdateProjectSummaryRequest,
+)
 
 def utcnow() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -90,6 +104,10 @@ def validate_facts_exist(
             raise HTTPException(404, f"Fact {fid} not found")
 
 
+def validate_fact_exists(conn: sqlite3.Connection, project_id: str, fact_id: str) -> None:
+    validate_facts_exist(conn, project_id, [fact_id])
+
+
 def validate_goal_not_in_sources(fact_ids: list[str]) -> None:
     if "goal" in fact_ids:
         raise HTTPException(400, "goal cannot be used in from")
@@ -110,6 +128,212 @@ def get_intent_or_404(
     if row is None:
         raise HTTPException(404, "Intent not found")
     return row
+
+
+def _load_tags(value: str) -> list[str]:
+    try:
+        payload = json.loads(value or "[]")
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(payload, list):
+        return []
+    result: list[str] = []
+    seen: set[str] = set()
+    for item in payload:
+        text = str(item).strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        result.append(text)
+    return result
+
+
+def fact_metadata_from_row(row: sqlite3.Row) -> FactMetadata:
+    return FactMetadata(
+        fact_id=row["fact_id"],
+        kind=row["kind"],
+        confidence=row["confidence"],
+        tags=_load_tags(row["tags_json"]),
+        summary=row["summary"],
+        source=row["source"],
+        updated_at=row["updated_at"],
+    )
+
+
+def intent_metadata_from_row(row: sqlite3.Row) -> IntentMetadata:
+    return IntentMetadata(
+        intent_id=row["intent_id"],
+        priority=row["priority"],
+        policy_status=row["policy_status"],
+        tags=_load_tags(row["tags_json"]),
+        summary=row["summary"],
+        updated_at=row["updated_at"],
+    )
+
+
+def build_project_metadata(conn: sqlite3.Connection, project_id: str) -> ProjectMetadata:
+    get_project_or_404(conn, project_id)
+    fact_rows = conn.execute(
+        "SELECT * FROM fact_metadata WHERE project_id = ? ORDER BY fact_id",
+        (project_id,),
+    ).fetchall()
+    intent_rows = conn.execute(
+        "SELECT * FROM intent_metadata WHERE project_id = ? ORDER BY intent_id",
+        (project_id,),
+    ).fetchall()
+    summary_row = conn.execute(
+        "SELECT * FROM project_summaries WHERE project_id = ?",
+        (project_id,),
+    ).fetchone()
+    checkpoint_row = conn.execute(
+        "SELECT * FROM observer_checkpoints WHERE project_id = ?",
+        (project_id,),
+    ).fetchone()
+    summary = (
+        ProjectSummaryMetadata(
+            content=summary_row["content"],
+            source=summary_row["source"],
+            updated_at=summary_row["updated_at"],
+        )
+        if summary_row is not None
+        else ProjectSummaryMetadata()
+    )
+    observer = (
+        ObserverCheckpoint(
+            last_digest=checkpoint_row["last_digest"],
+            last_observed_at=checkpoint_row["last_observed_at"],
+        )
+        if checkpoint_row is not None
+        else ObserverCheckpoint()
+    )
+    return ProjectMetadata(
+        project_id=project_id,
+        summary=summary,
+        facts={row["fact_id"]: fact_metadata_from_row(row) for row in fact_rows},
+        intents={row["intent_id"]: intent_metadata_from_row(row) for row in intent_rows},
+        observer=observer,
+    )
+
+
+def upsert_fact_metadata(
+    conn: sqlite3.Connection,
+    project_id: str,
+    fact_id: str,
+    body: UpdateFactMetadataRequest,
+) -> FactMetadata:
+    get_project_or_404(conn, project_id)
+    validate_fact_exists(conn, project_id, fact_id)
+    now = utcnow()
+    tags_json = json.dumps(body.tags, ensure_ascii=False, separators=(",", ":"))
+    conn.execute(
+        """
+        INSERT INTO fact_metadata (project_id, fact_id, kind, confidence, tags_json, summary, source, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(project_id, fact_id) DO UPDATE SET
+            kind = excluded.kind,
+            confidence = excluded.confidence,
+            tags_json = excluded.tags_json,
+            summary = excluded.summary,
+            source = excluded.source,
+            updated_at = excluded.updated_at
+        """,
+        (
+            project_id,
+            fact_id,
+            body.kind,
+            body.confidence,
+            tags_json,
+            body.summary,
+            body.source,
+            now,
+        ),
+    )
+    row = conn.execute(
+        "SELECT * FROM fact_metadata WHERE project_id = ? AND fact_id = ?",
+        (project_id, fact_id),
+    ).fetchone()
+    assert row is not None
+    return fact_metadata_from_row(row)
+
+
+def upsert_intent_metadata(
+    conn: sqlite3.Connection,
+    project_id: str,
+    intent_id: str,
+    body: UpdateIntentMetadataRequest,
+) -> IntentMetadata:
+    get_project_or_404(conn, project_id)
+    get_intent_or_404(conn, project_id, intent_id)
+    now = utcnow()
+    tags_json = json.dumps(body.tags, ensure_ascii=False, separators=(",", ":"))
+    conn.execute(
+        """
+        INSERT INTO intent_metadata (project_id, intent_id, priority, policy_status, tags_json, summary, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(project_id, intent_id) DO UPDATE SET
+            priority = excluded.priority,
+            policy_status = excluded.policy_status,
+            tags_json = excluded.tags_json,
+            summary = excluded.summary,
+            updated_at = excluded.updated_at
+        """,
+        (
+            project_id,
+            intent_id,
+            body.priority,
+            body.policy_status,
+            tags_json,
+            body.summary,
+            now,
+        ),
+    )
+    row = conn.execute(
+        "SELECT * FROM intent_metadata WHERE project_id = ? AND intent_id = ?",
+        (project_id, intent_id),
+    ).fetchone()
+    assert row is not None
+    return intent_metadata_from_row(row)
+
+
+def upsert_project_summary(
+    conn: sqlite3.Connection,
+    project_id: str,
+    body: UpdateProjectSummaryRequest,
+) -> ProjectSummaryMetadata:
+    get_project_or_404(conn, project_id)
+    now = utcnow()
+    conn.execute(
+        """
+        INSERT INTO project_summaries (project_id, content, source, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(project_id) DO UPDATE SET
+            content = excluded.content,
+            source = excluded.source,
+            updated_at = excluded.updated_at
+        """,
+        (project_id, body.content, body.source, now),
+    )
+    return ProjectSummaryMetadata(content=body.content, source=body.source, updated_at=now)
+
+
+def upsert_observer_checkpoint(
+    conn: sqlite3.Connection,
+    project_id: str,
+    body: UpdateObserverCheckpointRequest,
+) -> ObserverCheckpoint:
+    get_project_or_404(conn, project_id)
+    now = utcnow()
+    conn.execute(
+        """
+        INSERT INTO observer_checkpoints (project_id, last_digest, last_observed_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(project_id) DO UPDATE SET
+            last_digest = excluded.last_digest,
+            last_observed_at = excluded.last_observed_at
+        """,
+        (project_id, body.last_digest, now),
+    )
+    return ObserverCheckpoint(last_digest=body.last_digest, last_observed_at=now)
 
 
 def get_claimable_open_intent_or_404(

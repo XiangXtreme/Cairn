@@ -9,6 +9,13 @@ def parse_json_output(stdout: str) -> dict[str, Any]:
     return extract_json_object(stdout)
 
 
+def parse_observe_output(stdout: str, max_updates: int) -> tuple[str, dict[str, Any] | None]:
+    if stdout.strip() == "NO_CHANGE":
+        return "noop", None
+    payload = parse_json_output(stdout)
+    return validate_observe_payload(payload, max_updates=max_updates)
+
+
 def _unwrap_wrapped_payload(payload: dict[str, Any]) -> tuple[bool | None, dict[str, Any] | None]:
     accepted = payload.get("accepted")
     if accepted is False:
@@ -167,3 +174,182 @@ def validate_explore_payload(payload: dict[str, Any]) -> tuple[str, str | None]:
     if not isinstance(description, str) or not description.strip():
         raise ValueError("description is required")
     return "fact", description.strip()
+
+
+def validate_observe_payload(payload: dict[str, Any], max_updates: int) -> tuple[str, dict[str, Any] | None]:
+    accepted, data = _unwrap_wrapped_payload(payload)
+    if accepted is False:
+        return "rejected", None
+    if accepted is None:
+        data = payload
+    if not isinstance(data, dict):
+        raise ValueError("accepted must be true or false")
+    hint = _validate_observe_hint(data.get("hint"))
+    project_summary = _validate_observe_project_summary(data.get("project_summary"))
+    fact_metadata = _validate_observe_fact_metadata_list(data.get("fact_metadata"))
+    intent_metadata = _validate_observe_intent_metadata_list(data.get("intent_metadata"))
+    limited_fact_metadata, limited_intent_metadata = _limit_observe_updates(
+        fact_metadata,
+        intent_metadata,
+        max_updates=max_updates,
+    )
+    result = {
+        "hint": hint,
+        "project_summary": project_summary,
+        "fact_metadata": limited_fact_metadata,
+        "intent_metadata": limited_intent_metadata,
+    }
+    if not hint and not project_summary and not limited_fact_metadata and not limited_intent_metadata:
+        return "noop", None
+    return "update", result
+
+
+def _validate_observe_hint(value: Any) -> dict[str, str] | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError("hint must be an object")
+    content = value.get("content")
+    if not isinstance(content, str) or not content.strip():
+        raise ValueError("hint.content is required")
+    return {"content": content.strip()}
+
+
+def _validate_observe_project_summary(value: Any) -> dict[str, str] | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError("project_summary must be an object")
+    content = value.get("content")
+    if not isinstance(content, str) or not content.strip():
+        raise ValueError("project_summary.content is required")
+    source = value.get("source", "observer")
+    if not isinstance(source, str):
+        raise ValueError("project_summary.source must be a string")
+    return {"content": content.strip(), "source": source.strip() or "observer"}
+
+
+def _validate_observe_fact_metadata_list(value: Any) -> list[dict[str, Any]]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError("fact_metadata must be an array")
+    return [_validate_observe_fact_metadata(item, index) for index, item in enumerate(value)]
+
+
+def _validate_observe_intent_metadata_list(value: Any) -> list[dict[str, Any]]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError("intent_metadata must be an array")
+    return [_validate_observe_intent_metadata(item, index) for index, item in enumerate(value)]
+
+
+def _validate_observe_fact_metadata(value: Any, index: int) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError(f"fact_metadata[{index}] must be an object")
+    fact_id = _required_text(value, "fact_id", f"fact_metadata[{index}]")
+    kind = _optional_choice(
+        value,
+        "kind",
+        f"fact_metadata[{index}]",
+        {"fact", "evidence", "failure", "note", "hint"},
+        default="fact",
+    )
+    confidence = value.get("confidence")
+    if confidence is not None:
+        if isinstance(confidence, bool) or not isinstance(confidence, (int, float)):
+            raise ValueError(f"fact_metadata[{index}].confidence must be a number")
+        confidence = float(confidence)
+        if confidence < 0 or confidence > 1:
+            raise ValueError(f"fact_metadata[{index}].confidence must be between 0 and 1")
+    return {
+        "fact_id": fact_id,
+        "kind": kind,
+        "confidence": confidence,
+        "tags": _normalize_tags(value.get("tags")),
+        "summary": _optional_text(value, "summary"),
+        "source": _optional_text(value, "source") or "observer",
+    }
+
+
+def _validate_observe_intent_metadata(value: Any, index: int) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError(f"intent_metadata[{index}] must be an object")
+    intent_id = _required_text(value, "intent_id", f"intent_metadata[{index}]")
+    policy_status = _optional_choice(
+        value,
+        "policy_status",
+        f"intent_metadata[{index}]",
+        {"active", "paused", "stale"},
+        default="active",
+    )
+    priority = value.get("priority", 0)
+    if isinstance(priority, bool) or not isinstance(priority, int):
+        raise ValueError(f"intent_metadata[{index}].priority must be an integer")
+    return {
+        "intent_id": intent_id,
+        "priority": priority,
+        "policy_status": policy_status,
+        "tags": _normalize_tags(value.get("tags")),
+        "summary": _optional_text(value, "summary"),
+    }
+
+
+def _required_text(value: dict[str, Any], key: str, prefix: str) -> str:
+    raw = value.get(key)
+    if not isinstance(raw, str) or not raw.strip():
+        raise ValueError(f"{prefix}.{key} is required")
+    return raw.strip()
+
+
+def _optional_text(value: dict[str, Any], key: str) -> str:
+    raw = value.get(key, "")
+    if raw is None:
+        return ""
+    if not isinstance(raw, str):
+        raise ValueError(f"{key} must be a string")
+    return raw.strip()
+
+
+def _optional_choice(
+    value: dict[str, Any],
+    key: str,
+    prefix: str,
+    allowed: set[str],
+    *,
+    default: str,
+) -> str:
+    raw = value.get(key, default)
+    if not isinstance(raw, str) or raw not in allowed:
+        raise ValueError(f"{prefix}.{key} must be one of: {', '.join(sorted(allowed))}")
+    return raw
+
+
+def _normalize_tags(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError("tags must be an array")
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in value:
+        text = str(item).strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        result.append(text)
+    return result
+
+
+def _limit_observe_updates(
+    fact_metadata: list[dict[str, Any]],
+    intent_metadata: list[dict[str, Any]],
+    *,
+    max_updates: int,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    budget = max(0, max_updates)
+    limited_fact_metadata = fact_metadata[:budget]
+    remaining = max(0, budget - len(limited_fact_metadata))
+    limited_intent_metadata = intent_metadata[:remaining]
+    return limited_fact_metadata, limited_intent_metadata

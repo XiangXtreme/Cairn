@@ -78,6 +78,44 @@ CREATE TABLE IF NOT EXISTS scoped_counters (
     value INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (project_id, kind)
 );
+
+CREATE TABLE IF NOT EXISTS fact_metadata (
+    project_id TEXT NOT NULL,
+    fact_id TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'fact',
+    confidence REAL,
+    tags_json TEXT NOT NULL DEFAULT '[]',
+    summary TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (project_id, fact_id),
+    FOREIGN KEY (fact_id, project_id) REFERENCES facts(id, project_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS intent_metadata (
+    project_id TEXT NOT NULL,
+    intent_id TEXT NOT NULL,
+    priority INTEGER NOT NULL DEFAULT 0,
+    policy_status TEXT NOT NULL DEFAULT 'active',
+    tags_json TEXT NOT NULL DEFAULT '[]',
+    summary TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (project_id, intent_id),
+    FOREIGN KEY (intent_id, project_id) REFERENCES intents(id, project_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS project_summaries (
+    project_id TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+    content TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS observer_checkpoints (
+    project_id TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+    last_digest TEXT NOT NULL DEFAULT '',
+    last_observed_at TEXT
+);
 """
 
 
