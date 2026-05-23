@@ -346,9 +346,10 @@ def import_skill_zip(body: SkillZipImportRequest) -> SkillZipImportResponse:
             raise HTTPException(400, f"Unable to read imported SKILL.md: {exc}") from exc
 
         skill_name = _extract_skill_name(skill_dir, text)
+        skill_id_hint = _extract_skill_id_hint(skill_dir, text)
         skill_id = _resolve_skill_id(
             skill_dir,
-            name=skill_name,
+            name=skill_id_hint,
             fallback=Path(filename).stem,
         )
         target_dir = registry_root / skill_id
@@ -765,6 +766,7 @@ def _worker_to_settings(
     )
     provider_id = _infer_provider_id(worker_raw)
     provider = next((item for item in providers if item.id == provider_id), None)
+    provider_env_keys = set(provider.extra_env.keys()) if provider else set()
     settings = DispatchWorkerSettings(
         source_name=str(worker_raw.get("name", "")).strip(),
         name=str(worker_raw.get("name", "")).strip(),
@@ -775,16 +777,16 @@ def _worker_to_settings(
         priority=worker_raw["priority"],
         provider_id=provider_id,
         provider_supported=_PROVIDER_SUPPORT_MATRIX[worker_type],
-        model=provider.model if provider else str(env.get(field_map.get("model", ""), "")).strip(),
+        model=str(env.get(field_map.get("model", ""), "")).strip(),
         base_url=provider.base_url if provider else str(env.get(field_map.get("base_url", ""), "")).strip(),
         auth_token="",
         has_auth_token=provider.has_auth_token if provider else bool(str(env.get(field_map.get("auth_token", ""), "")).strip()),
-        provider_api=provider.provider_api if provider else str(env.get(field_map.get("provider_api", ""), "")).strip(),
-        context_window=provider.context_window if provider and provider.context_window is not None else context_window,
+        provider_api=str(env.get(field_map.get("provider_api", ""), "")).strip(),
+        context_window=context_window,
         extra_env={
             str(key): str(value)
             for key, value in env.items()
-            if str(key) not in known_env_keys
+            if str(key) not in known_env_keys and str(key) not in provider_env_keys
         },
         mcp_server_ids=list(binding.mcp_server_ids) if binding else [],
         skill_ids=list(binding.skill_ids) if binding else [],
@@ -804,6 +806,9 @@ def _worker_to_bundle(worker: DispatchWorkerSettings, *, existing_auth_token: st
 
 def _provider_to_bundle(provider: ProviderSettings, *, existing_auth_token: str = "") -> dict[str, Any]:
     payload = provider.model_dump()
+    payload["model"] = ""
+    payload["provider_api"] = ""
+    payload["context_window"] = None
     if not payload.get("auth_token") and payload.get("has_auth_token") and existing_auth_token:
         payload["auth_token"] = existing_auth_token
     payload["extra_env"] = _filter_editable_extra_env(provider.extra_env)
@@ -859,12 +864,15 @@ def _merge_workers(
         _clear_known_worker_env(env)
         field_map = _WORKER_ENV_FIELD_MAP[worker.type]
         provider = provider_by_id.get(worker.provider_id) if worker.provider_id else None
-        model_value = provider.model if provider else worker.model
+        model_value = worker.model
         base_url_value = provider.base_url if provider else worker.base_url
         auth_token_value = provider.auth_token if provider and provider.auth_token else worker.auth_token
-        provider_api_value = provider.provider_api if provider else worker.provider_api
-        context_window_value = provider.context_window if provider and provider.context_window is not None else worker.context_window
-        extra_env_value = provider.extra_env if provider else worker.extra_env
+        provider_api_value = worker.provider_api
+        context_window_value = worker.context_window
+        extra_env_value = {}
+        if provider:
+            extra_env_value.update(provider.extra_env)
+        extra_env_value.update(worker.extra_env)
 
         _set_env_value(env, field_map.get("model"), model_value)
         _set_env_value(env, field_map.get("base_url"), base_url_value)
@@ -971,21 +979,13 @@ def _serialize_provider_spec(worker: DispatchWorkerSettings, provider: ProviderS
         return {
             "id": provider.id,
             "name": provider.name,
-            "kind": provider.kind,
-            "model": provider.model,
             "base_url": provider.base_url,
-            "provider_api": provider.provider_api,
-            "context_window": provider.context_window,
             "extra_env": provider.extra_env,
         }
     return {
         "id": worker.provider_id or "",
         "name": worker.name,
-        "kind": worker.type,
-        "model": worker.model,
         "base_url": worker.base_url,
-        "provider_api": worker.provider_api,
-        "context_window": worker.context_window,
         "extra_env": worker.extra_env,
     }
 
@@ -1029,7 +1029,7 @@ def _build_discovered_skill(skill_dir: Path, registered_ids: set[str]) -> Discov
         return None
     name = _extract_skill_name(skill_dir, text)
     description = _extract_skill_description(text)
-    skill_id = _resolve_skill_id(skill_dir, name=name)
+    skill_id = _resolve_skill_id(skill_dir, name=_extract_skill_id_hint(skill_dir, text))
     return DiscoveredSkill(
         id=skill_id,
         name=name,
@@ -1041,7 +1041,8 @@ def _build_discovered_skill(skill_dir: Path, registered_ids: set[str]) -> Discov
 
 
 def _extract_skill_name(skill_dir: Path, text: str) -> str:
-    for line in text.splitlines():
+    _frontmatter, body = _extract_skill_frontmatter(text)
+    for line in body.splitlines():
         stripped = line.strip()
         if stripped.startswith("#"):
             value = stripped.lstrip("#").strip()
@@ -1050,13 +1051,46 @@ def _extract_skill_name(skill_dir: Path, text: str) -> str:
     return skill_dir.name
 
 
+def _extract_skill_id_hint(skill_dir: Path, text: str) -> str:
+    frontmatter, _body = _extract_skill_frontmatter(text)
+    frontmatter_name = frontmatter.get("name")
+    if isinstance(frontmatter_name, str) and frontmatter_name.strip():
+        return frontmatter_name.strip()
+    return skill_dir.name
+
+
 def _extract_skill_description(text: str) -> str:
-    for line in text.splitlines():
+    frontmatter, body = _extract_skill_frontmatter(text)
+    description = frontmatter.get("description")
+    if isinstance(description, str) and description.strip():
+        return description.strip()[:240]
+    for line in body.splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
         return stripped[:240]
     return ""
+
+
+def _extract_skill_frontmatter(text: str) -> tuple[dict[str, Any], str]:
+    if not text.startswith("---"):
+        return {}, text
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return {}, text
+    for index, line in enumerate(lines[1:], start=1):
+        if line.strip() != "---":
+            continue
+        raw_frontmatter = "\n".join(lines[1:index])
+        body = "\n".join(lines[index + 1 :])
+        try:
+            parsed = yaml.safe_load(raw_frontmatter) or {}
+        except yaml.YAMLError:
+            return {}, body
+        if isinstance(parsed, dict):
+            return parsed, body
+        return {}, body
+    return {}, text
 
 
 def _resolve_skill_id(skill_dir: Path, *, name: str = "", fallback: str = "") -> str:
@@ -1165,29 +1199,31 @@ def _providers_from_file_workers(workers_raw: list[dict[str, Any]]) -> list[Prov
         if worker_type not in _WORKER_ENV_FIELD_MAP or worker_type == "mock":
             continue
         env = deepcopy(worker_raw.get("env") or {})
+        provider_spec = _provider_spec_from_worker_env(env)
         field_map = _WORKER_ENV_FIELD_MAP[worker_type]
         known_env_keys = {value for value in field_map.values() if value}
         known_env_keys.update({_MCP_ENV_KEY, _SKILL_ENV_KEY, _PROVIDER_ENV_KEY})
         provider_id = _infer_provider_id(worker_raw)
+        provider_extra_env = provider_spec.get("extra_env") if isinstance(provider_spec.get("extra_env"), dict) else None
         providers.append(
             ProviderSettings(
                 id=provider_id,
-                name=f"{worker_raw.get('name', provider_id)} Provider",
+                name=str(provider_spec.get("name") or f"{worker_raw.get('name', provider_id)} Provider"),
                 enabled=True,
-                kind=worker_type,
-                model=str(env.get(field_map.get("model", ""), "")).strip(),
-                base_url=str(env.get(field_map.get("base_url", ""), "")).strip(),
+                kind=(
+                    provider_spec.get("kind")
+                    if provider_spec.get("kind") in {"claudecode", "codex", "pi"}
+                    else worker_type
+                ),
+                model="",
+                base_url=str(env.get(field_map.get("base_url", ""), provider_spec.get("base_url", ""))).strip(),
                 auth_token="",
                 has_auth_token=bool(str(env.get(field_map.get("auth_token", ""), "")).strip()),
-                provider_api=str(env.get(field_map.get("provider_api", ""), "")).strip(),
-                context_window=(
-                    int(str(env.get(field_map["context_window"], "")).strip())
-                    if field_map.get("context_window") and str(env.get(field_map["context_window"], "")).strip()
-                    else None
-                ),
+                provider_api="",
+                context_window=None,
                 extra_env={
                     str(key): str(value)
-                    for key, value in env.items()
+                    for key, value in (provider_extra_env or {}).items()
                     if str(key) not in known_env_keys
                 },
             )
@@ -1202,8 +1238,25 @@ def _infer_provider_id(worker_raw: dict[str, Any]) -> str:
     explicit = str(worker_raw.get("provider_id", "")).strip()
     if explicit:
         return explicit
+    provider_spec = _provider_spec_from_worker_env(worker_raw.get("env") or {})
+    provider_spec_id = str(provider_spec.get("id", "")).strip()
+    if provider_spec_id:
+        return provider_spec_id
     worker_name = str(worker_raw.get("name", "")).strip() or "worker"
     return f"{worker_name}_provider"
+
+
+def _provider_spec_from_worker_env(env: dict[str, Any]) -> dict[str, Any]:
+    raw_spec = env.get(_PROVIDER_ENV_KEY)
+    if not raw_spec:
+        return {}
+    try:
+        parsed = json.loads(str(raw_spec))
+    except (TypeError, ValueError):
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    return parsed
 
 
 def _set_env_value(env: dict[str, Any], key: str | None, value: str) -> None:

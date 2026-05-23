@@ -84,7 +84,7 @@ def test_ui_dispatch_settings_bundle_and_compiled_yaml(tmp_path: Path, monkeypat
         "providers": [
             {
                 **data["providers"][0],
-                "model": "gpt-5.5",
+                "model": "provider-model-ignored",
                 "base_url": "https://ai.example.test/v1",
                 "auth_token": "sk-new",
             },
@@ -92,13 +92,10 @@ def test_ui_dispatch_settings_bundle_and_compiled_yaml(tmp_path: Path, monkeypat
                 "id": "pi_shared",
                 "name": "Pi Shared",
                 "enabled": True,
-                "kind": "pi",
-                "model": "qwen3-coder-plus",
+                "model": "provider-model-ignored",
                 "base_url": "https://pi.example.test/v1",
                 "auth_token": "pi-token",
                 "has_auth_token": False,
-                "provider_api": "openai-completions",
-                "context_window": 262144,
                 "extra_env": {"PI_DIR": "/tmp/pi"},
             },
         ],
@@ -106,6 +103,7 @@ def test_ui_dispatch_settings_bundle_and_compiled_yaml(tmp_path: Path, monkeypat
                 {
                     **data["workers"][0],
                     "provider_id": "codex_main_provider",
+                    "model": "gpt-5.5",
                     "mcp_server_ids": ["context7"],
                     "skill_ids": ["review"],
                     "mcp_supported": True,
@@ -121,12 +119,12 @@ def test_ui_dispatch_settings_bundle_and_compiled_yaml(tmp_path: Path, monkeypat
                 "priority": 1,
                 "provider_id": "pi_shared",
                 "provider_supported": True,
-                "model": "",
+                "model": "qwen3-coder-plus",
                 "base_url": "",
                 "auth_token": "",
                 "has_auth_token": False,
-                "provider_api": "",
-                "context_window": None,
+                "provider_api": "openai-completions",
+                "context_window": 262144,
                 "mcp_server_ids": [],
                 "skill_ids": [],
                 "mcp_supported": False,
@@ -173,7 +171,8 @@ def test_ui_dispatch_settings_bundle_and_compiled_yaml(tmp_path: Path, monkeypat
     saved = client.put("/settings/dispatch", json=update)
     assert saved.status_code == 200, saved.text
     saved_data = saved.json()
-    assert saved_data["providers"][0]["model"] == "gpt-5.5"
+    assert saved_data["providers"][0]["model"] == ""
+    assert saved_data["workers"][0]["model"] == "gpt-5.5"
     assert saved_data["workers"][0]["provider_id"] == "codex_main_provider"
     assert saved_data["mcp_servers"][0]["id"] == "context7"
     assert saved_data["skills"][0]["id"] == "review"
@@ -191,7 +190,8 @@ def test_ui_dispatch_settings_bundle_and_compiled_yaml(tmp_path: Path, monkeypat
 
     workers_json = json.loads((bundle_root / "workers.json").read_text(encoding="utf-8"))
     providers_json = json.loads((bundle_root / "providers.json").read_text(encoding="utf-8"))
-    assert providers_json[0]["model"] == "gpt-5.5"
+    assert providers_json[0]["model"] == ""
+    assert workers_json[0]["model"] == "gpt-5.5"
     assert workers_json[0]["mcp_server_ids"] == ["context7"]
 
     compiled = compiled_path.read_text(encoding="utf-8")
@@ -231,7 +231,8 @@ def test_ui_dispatch_settings_preserves_auth_token_when_secret_field_is_blank(tm
     second_payload = first_save.json()
     second_payload["providers"][0]["auth_token"] = ""
     second_payload["providers"][0]["has_auth_token"] = True
-    second_payload["providers"][0]["model"] = "gpt-5.5"
+    second_payload["providers"][0]["model"] = "provider-model-ignored"
+    second_payload["workers"][0]["model"] = "gpt-5.5"
 
     second_save = client.put("/settings/dispatch", json=second_payload)
     assert second_save.status_code == 200, second_save.text
@@ -239,10 +240,54 @@ def test_ui_dispatch_settings_preserves_auth_token_when_secret_field_is_blank(tm
     bundle_root = tmp_path / "datas" / "cairn" / "dispatch_ui"
     providers_json = json.loads((bundle_root / "providers.json").read_text(encoding="utf-8"))
     assert providers_json[0]["auth_token"] == "sk-first"
+    assert providers_json[0]["model"] == ""
 
     compiled = (tmp_path / "datas" / "cairn" / "dispatch_ui.yaml").read_text(encoding="utf-8")
     assert "OPENAI_API_KEY: sk-first" in compiled
     assert "CODEX_MODEL: gpt-5.5" in compiled
+
+
+def test_file_dispatch_provider_spec_preserves_provider_binding(tmp_path: Path, monkeypatch) -> None:
+    db_path = tmp_path / "cairn.db"
+    db._db_path = None
+    db.configure(db_path)
+
+    dispatch_path = tmp_path / "dispatch.yaml"
+    _write_dispatch(dispatch_path)
+
+    monkeypatch.setenv("CAIRN_DISPATCH_CONFIG", str(dispatch_path))
+    monkeypatch.setenv("CAIRN_DISPATCH_SETTINGS_MODE", "file")
+
+    client = TestClient(app)
+    initial = client.get("/settings/dispatch?mode=file")
+    assert initial.status_code == 200
+    payload = initial.json()
+
+    payload["providers"][0]["id"] = "shared_codex_provider"
+    payload["providers"][0]["name"] = "Shared Codex"
+    payload["providers"][0]["model"] = "provider-model-ignored"
+    payload["workers"][0]["provider_id"] = "shared_codex_provider"
+    payload["workers"][0]["model"] = "gpt-5.5"
+
+    saved = client.put("/settings/dispatch", json=payload)
+    assert saved.status_code == 200, saved.text
+    saved_data = saved.json()
+    assert saved_data["providers"][0]["id"] == "shared_codex_provider"
+    assert saved_data["providers"][0]["name"] == "Shared Codex"
+    assert saved_data["providers"][0]["model"] == ""
+    assert saved_data["workers"][0]["model"] == "gpt-5.5"
+    assert saved_data["workers"][0]["provider_id"] == "shared_codex_provider"
+
+    raw = dispatch_path.read_text(encoding="utf-8")
+    assert "CODEX_MODEL: gpt-5.5" in raw
+    assert "shared_codex_provider" in raw
+
+    reloaded = client.get("/settings/dispatch?mode=file")
+    assert reloaded.status_code == 200
+    reloaded_data = reloaded.json()
+    assert reloaded_data["providers"][0]["id"] == "shared_codex_provider"
+    assert reloaded_data["providers"][0]["name"] == "Shared Codex"
+    assert reloaded_data["workers"][0]["provider_id"] == "shared_codex_provider"
 
 
 def test_disabled_worker_does_not_require_credentials_in_ui_mode(tmp_path: Path, monkeypatch) -> None:
@@ -371,10 +416,11 @@ def test_ui_settings_hides_runtime_injected_env_from_editable_extra_env(tmp_path
     saved = client.put("/settings/dispatch", json=payload)
     assert saved.status_code == 200, saved.text
     saved_data = saved.json()
-    assert saved_data["workers"][0]["extra_env"] == {"CUSTOM_PROVIDER_ENV": "kept"}
+    assert saved_data["workers"][0]["extra_env"] == {"CUSTOM_FLAG": "kept"}
     assert saved_data["providers"][0]["extra_env"] == {"CUSTOM_PROVIDER_ENV": "kept"}
 
     compiled = (tmp_path / "datas" / "cairn" / "dispatch_ui.yaml").read_text(encoding="utf-8")
+    assert "CUSTOM_FLAG: kept" in compiled
     assert "CUSTOM_PROVIDER_ENV: kept" in compiled
     assert "CAIRN_MCP_SERVERS: '[]'" not in compiled
     assert "CAIRN_SKILLS: '[]'" not in compiled
@@ -421,7 +467,7 @@ def test_discover_skills_syncs_repo_skill_into_registry(tmp_path: Path, monkeypa
     repo_skill = tmp_path / "skills" / "web-ssrf"
     repo_skill.mkdir(parents=True, exist_ok=True)
     (repo_skill / "SKILL.md").write_text(
-        "---\nname: web-ssrf\n---\n# Web SSRF\n\nFresh repo skill.\n",
+        "---\nname: web-ssrf\ndescription: Fresh frontmatter description.\n---\n# Web SSRF\n\nFresh repo skill.\n",
         encoding="utf-8",
     )
 
@@ -440,6 +486,7 @@ def test_discover_skills_syncs_repo_skill_into_registry(tmp_path: Path, monkeypa
     assert len(registry_items) == 1
     assert registry_items[0]["source"] == "registry"
     assert registry_items[0]["path"].endswith("datas/cairn/registry/skills/web-ssrf")
+    assert registry_items[0]["description"] == "Fresh frontmatter description."
 
     synced = (registry_skill / "SKILL.md").read_text(encoding="utf-8")
     assert "Fresh repo skill." in synced

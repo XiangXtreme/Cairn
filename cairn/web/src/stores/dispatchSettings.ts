@@ -11,7 +11,6 @@ import type {
   EditableWorkerSettings,
   LeaseSettings,
   McpServerSettings,
-  ProviderKind,
   ProviderSettings,
   SkillSettings,
   TaskType,
@@ -89,6 +88,14 @@ function sanitizeExtraEnv(env: Record<string, string> | undefined): Record<strin
 
 function normalizeWorker(worker: Partial<EditableWorkerSettings>): EditableWorkerSettings {
   const type = (worker.type || 'codex') as WorkerType;
+  const extraEnv = sanitizeExtraEnv(worker.extra_env);
+  const hasDirectConfig = Boolean(
+    worker.model
+      || worker.base_url
+      || worker.has_auth_token
+      || worker.provider_api
+      || worker.context_window,
+  );
   return {
     source_name: worker.source_name || worker.name || '',
     name: worker.name || '',
@@ -107,12 +114,13 @@ function normalizeWorker(worker: Partial<EditableWorkerSettings>): EditableWorke
     has_auth_token: worker.has_auth_token === true,
     provider_api: worker.provider_api || '',
     context_window: worker.context_window ?? null,
-    extra_env: sanitizeExtraEnv(worker.extra_env),
+    extra_env: extraEnv,
     mcp_server_ids: Array.isArray(worker.mcp_server_ids) ? [...worker.mcp_server_ids] : [],
     skill_ids: Array.isArray(worker.skill_ids) ? [...worker.skill_ids] : [],
     mcp_supported: worker.mcp_supported !== false && ['claudecode', 'codex'].includes(type),
     skill_supported: worker.skill_supported === true || ['claudecode', 'codex'].includes(type),
-    show_legacy_provider: false,
+    show_direct_config: !worker.provider_id && hasDirectConfig,
+    show_runtime_env: Object.keys(extraEnv).length > 0,
     healthcheck: null,
     is_testing_healthcheck: false,
   };
@@ -180,13 +188,13 @@ function normalizeProvider(provider: Partial<ProviderSettings>): ProviderSetting
     id: provider.id || '',
     name: provider.name || '',
     enabled: provider.enabled !== false,
-    kind: (provider.kind || 'codex') as ProviderKind,
-    model: provider.model || '',
+    kind: provider.kind || 'codex',
+    model: '',
     base_url: provider.base_url || '',
     auth_token: '',
     has_auth_token: provider.has_auth_token === true,
-    provider_api: provider.provider_api || '',
-    context_window: provider.context_window ?? null,
+    provider_api: '',
+    context_window: null,
     extra_env: sanitizeExtraEnv(provider.extra_env),
   };
 }
@@ -310,12 +318,16 @@ export const useDispatchSettingsStore = defineStore('dispatchSettings', () => {
       runtime: { ...form.runtime },
       tasks: normalizeTasks(form.tasks),
       providers: form.providers.map((provider) => ({
-        ...provider,
+        id: provider.id || '',
+        name: provider.name || '',
+        enabled: provider.enabled !== false,
+        kind: provider.kind || 'codex',
+        model: '',
+        base_url: provider.base_url || '',
         auth_token: provider.auth_token || '',
-        context_window:
-          provider.context_window === null || provider.context_window === undefined || provider.context_window === 0
-            ? null
-            : Number(provider.context_window),
+        has_auth_token: provider.has_auth_token === true,
+        provider_api: '',
+        context_window: null,
         extra_env: sanitizeExtraEnv(provider.extra_env),
       })),
       workers: form.workers.map(serializeWorker),
@@ -334,6 +346,11 @@ export const useDispatchSettingsStore = defineStore('dispatchSettings', () => {
   }
 
   async function saveDispatchSettings() {
+    const validationError = validateProviderBindings();
+    if (validationError) {
+      ui.showToast(validationError, 'error');
+      return;
+    }
     isSaving.value = true;
     try {
       const saved = await api.saveDispatchSettings(serializePayload());
@@ -401,7 +418,6 @@ export const useDispatchSettingsStore = defineStore('dispatchSettings', () => {
       id: `provider_${form.providers.length + 1}`,
       name: '',
       enabled: true,
-      kind: 'codex',
     });
   }
 
@@ -435,8 +451,6 @@ export const useDispatchSettingsStore = defineStore('dispatchSettings', () => {
   }
 
   function onWorkerTypeChange(worker: EditableWorkerSettings) {
-    const provider = form.providers.find((item) => item.id === worker.provider_id);
-    if (provider && provider.kind !== worker.type) worker.provider_id = '';
     if (worker.type !== 'pi') {
       worker.provider_api = '';
       worker.context_window = null;
@@ -448,6 +462,8 @@ export const useDispatchSettingsStore = defineStore('dispatchSettings', () => {
       worker.model = '';
       worker.base_url = '';
       worker.auth_token = '';
+      worker.show_direct_config = false;
+      worker.show_runtime_env = false;
     }
     worker.provider_supported = worker.type !== 'mock';
     worker.mcp_supported = ['claudecode', 'codex'].includes(worker.type);
@@ -468,15 +484,13 @@ export const useDispatchSettingsStore = defineStore('dispatchSettings', () => {
     }
   }
 
-  function onProviderKindChange(provider: ProviderSettings) {
-    if (provider.kind !== 'pi') {
-      provider.provider_api = '';
-      provider.context_window = null;
-    } else if (!provider.provider_api) {
-      provider.provider_api = 'openai-completions';
-    }
+  function setProviderId(provider: ProviderSettings, nextId: string) {
+    const previousId = provider.id;
+    const normalizedNextId = nextId.trim();
+    provider.id = normalizedNextId;
+    if (previousId === normalizedNextId) return;
     for (const worker of form.workers) {
-      if (worker.provider_id === provider.id && worker.type !== provider.kind) worker.provider_id = '';
+      if (worker.provider_id === previousId) worker.provider_id = normalizedNextId;
     }
   }
 
@@ -509,11 +523,48 @@ export const useDispatchSettingsStore = defineStore('dispatchSettings', () => {
   }
 
   function providersForWorker(worker: EditableWorkerSettings) {
-    return form.providers.filter((provider) => provider.kind === worker.type);
+    if (worker.type === 'mock') return [];
+    return form.providers;
   }
 
   function providerWorkerCount(providerId: string) {
     return form.workers.filter((worker) => worker.provider_id === providerId).length;
+  }
+
+  function providerWorkerNames(providerId: string) {
+    return form.workers
+      .filter((worker) => worker.provider_id === providerId)
+      .map((worker) => worker.name || '未命名 Worker');
+  }
+
+  function providerIdCount(providerId: string) {
+    const normalizedProviderId = providerId.trim();
+    if (!normalizedProviderId) return 0;
+    return form.providers.filter((provider) => provider.id === normalizedProviderId).length;
+  }
+
+  function providerIssues(provider: ProviderSettings) {
+    const issues: string[] = [];
+    if (!provider.id.trim()) issues.push('Provider 标识不能为空');
+    if (providerIdCount(provider.id) > 1) issues.push('Provider 标识重复');
+    return issues;
+  }
+
+  function providerBindingIssue(worker: EditableWorkerSettings) {
+    if (!worker.provider_id) return '';
+    const provider = selectedProviderForWorker(worker);
+    if (!provider) return `绑定的 Provider 不存在：${worker.provider_id}`;
+    return '';
+  }
+
+  function validateProviderBindings() {
+    const emptyProvider = form.providers.find((provider) => !provider.id.trim());
+    if (emptyProvider) return 'Provider 标识不能为空';
+    const duplicateProvider = form.providers.find((provider) => providerIdCount(provider.id) > 1);
+    if (duplicateProvider) return `Provider 标识重复：${duplicateProvider.id}`;
+    const conflictedWorker = form.workers.find((worker) => providerBindingIssue(worker));
+    if (conflictedWorker) return `${conflictedWorker.name || '未命名 Worker'}：${providerBindingIssue(conflictedWorker)}`;
+    return '';
   }
 
   function toggleWorkerMcp(worker: EditableWorkerSettings, serverId: string) {
@@ -657,7 +708,7 @@ export const useDispatchSettingsStore = defineStore('dispatchSettings', () => {
     onWorkerTypeChange,
     addProvider,
     removeProvider,
-    onProviderKindChange,
+    setProviderId,
     addMcpServer,
     removeMcpServer,
     addSkill,
@@ -665,6 +716,10 @@ export const useDispatchSettingsStore = defineStore('dispatchSettings', () => {
     selectedProviderForWorker,
     providersForWorker,
     providerWorkerCount,
+    providerWorkerNames,
+    providerIssues,
+    providerBindingIssue,
+    validateProviderBindings,
     toggleWorkerMcp,
     toggleWorkerSkill,
     toggleWorkerTask,

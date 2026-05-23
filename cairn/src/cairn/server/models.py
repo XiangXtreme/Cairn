@@ -127,7 +127,7 @@ class ProviderSettings(BaseModel):
     id: str
     name: str
     enabled: bool = True
-    kind: ProviderKind
+    kind: ProviderKind = "codex"
     model: str = ""
     base_url: str = ""
     auth_token: str = ""

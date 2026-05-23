@@ -20,7 +20,7 @@ const { settingsSection } = storeToRefs(ui);
 
 const navItems: { id: SettingsSection; label: string; desc: string; icon: typeof Server }[] = [
   { id: 'mode', label: '运行模式', desc: '配置来源与热加载', icon: Database },
-  { id: 'providers', label: 'Provider', desc: '模型源与鉴权配置', icon: Server },
+  { id: 'providers', label: 'Provider', desc: '端点与鉴权配置', icon: Server },
   { id: 'workers', label: 'Agent / Worker', desc: '模型与任务覆盖', icon: Cpu },
   { id: 'mcp', label: 'MCP', desc: '统一资源与绑定', icon: Wrench },
   { id: 'skills', label: 'Skill', desc: '本地 skill 注册', icon: Wrench },

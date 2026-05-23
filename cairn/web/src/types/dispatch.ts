@@ -46,7 +46,7 @@ export interface ProviderSettings {
   id: string;
   name: string;
   enabled: boolean;
-  kind: ProviderKind;
+  kind?: ProviderKind;
   model: string;
   base_url: string;
   auth_token: string;
@@ -92,7 +92,8 @@ export interface DispatchWorkerSettings {
 }
 
 export interface EditableWorkerSettings extends DispatchWorkerSettings {
-  show_legacy_provider: boolean;
+  show_direct_config: boolean;
+  show_runtime_env: boolean;
   healthcheck: WorkerHealthcheckResponse | null;
   is_testing_healthcheck: boolean;
 }
