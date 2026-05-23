@@ -52,7 +52,7 @@ def serve(host: str, port: int, db_path: str, log_level: str, access_log: bool):
     "--config-mode",
     type=click.Choice(["file", "ui"]),
     default=None,
-    help="Dispatcher config source. Defaults to CAIRN_DISPATCH_SETTINGS_MODE or file.",
+    help="Dispatcher config source. Defaults to CAIRN_DISPATCH_SETTINGS_MODE or ui.",
 )
 @click.option("--once", is_flag=True, help="Run one scheduling iteration and exit")
 @click.option(

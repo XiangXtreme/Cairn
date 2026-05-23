@@ -205,6 +205,29 @@ def test_ui_dispatch_settings_bundle_and_compiled_yaml(tmp_path: Path, monkeypat
     assert "enabled: false" in compiled
 
 
+def test_dispatch_settings_defaults_to_ui_mode_when_mode_is_unspecified(tmp_path: Path, monkeypatch) -> None:
+    db_path = tmp_path / "cairn.db"
+    db._db_path = None
+    db.configure(db_path)
+
+    dispatch_path = tmp_path / "dispatch.yaml"
+    _write_dispatch(dispatch_path)
+
+    monkeypatch.setenv("CAIRN_DISPATCH_CONFIG", str(dispatch_path))
+    monkeypatch.setenv("CAIRN_UI_DISPATCH_CONFIG", str(tmp_path / "datas" / "cairn" / "dispatch_ui.yaml"))
+    monkeypatch.delenv("CAIRN_DISPATCH_SETTINGS_MODE", raising=False)
+
+    client = TestClient(app)
+
+    payload = client.get("/settings/dispatch")
+    assert payload.status_code == 200
+    data = payload.json()
+    assert data["mode"] == "ui"
+    assert data["path"].endswith("dispatch_ui.yaml")
+    assert data["mode_info"]["source_path"].endswith("dispatch_ui")
+    assert data["mode_info"]["compiled_path"].endswith("dispatch_ui.yaml")
+
+
 def test_ui_dispatch_settings_preserves_auth_token_when_secret_field_is_blank(tmp_path: Path, monkeypatch) -> None:
     db_path = tmp_path / "cairn.db"
     db._db_path = None
@@ -245,6 +268,39 @@ def test_ui_dispatch_settings_preserves_auth_token_when_secret_field_is_blank(tm
     compiled = (tmp_path / "datas" / "cairn" / "dispatch_ui.yaml").read_text(encoding="utf-8")
     assert "OPENAI_API_KEY: sk-first" in compiled
     assert "CODEX_MODEL: gpt-5.5" in compiled
+
+
+def test_ui_dispatch_settings_restores_missing_providers_from_compiled_workers(tmp_path: Path, monkeypatch) -> None:
+    db_path = tmp_path / "cairn.db"
+    db._db_path = None
+    db.configure(db_path)
+
+    dispatch_path = tmp_path / "dispatch.yaml"
+    _write_dispatch(dispatch_path)
+
+    monkeypatch.setenv("CAIRN_DISPATCH_CONFIG", str(dispatch_path))
+    monkeypatch.setenv("CAIRN_UI_DISPATCH_CONFIG", str(tmp_path / "datas" / "cairn" / "dispatch_ui.yaml"))
+    monkeypatch.setenv("CAIRN_DISPATCH_SETTINGS_MODE", "ui")
+
+    client = TestClient(app)
+    initial = client.get("/settings/dispatch?mode=ui")
+    assert initial.status_code == 200
+
+    bundle_root = tmp_path / "datas" / "cairn" / "dispatch_ui"
+    providers_path = bundle_root / "providers.json"
+    providers_path.write_text("[]", encoding="utf-8")
+
+    restored = client.get("/settings/dispatch?mode=ui")
+    assert restored.status_code == 200
+    restored_payload = restored.json()
+    assert restored_payload["providers"][0]["id"] == "codex_main_provider"
+    assert restored_payload["workers"][0]["provider_id"] == "codex_main_provider"
+
+    healed = json.loads(providers_path.read_text(encoding="utf-8"))
+    assert healed[0]["id"] == "codex_main_provider"
+
+    saved = client.put("/settings/dispatch", json=restored_payload)
+    assert saved.status_code == 200, saved.text
 
 
 def test_file_dispatch_provider_spec_preserves_provider_binding(tmp_path: Path, monkeypatch) -> None:

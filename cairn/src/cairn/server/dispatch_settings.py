@@ -174,7 +174,7 @@ def resolve_dispatch_settings_mode(mode: DispatchSettingsMode | None = None) -> 
     env_value = os.getenv(_DISPATCH_SETTINGS_MODE_ENV, "").strip().lower()
     if env_value in {"file", "ui"}:
         return env_value  # type: ignore[return-value]
-    return "file"
+    return "ui"
 
 
 def resolve_dispatch_settings_path(mode: DispatchSettingsMode | None = None, *, create_ui: bool = False) -> Path:
@@ -202,6 +202,7 @@ def read_dispatch_settings(mode: DispatchSettingsMode | None = None) -> Dispatch
 
     if resolved_mode == "ui":
         ui_bundle = _read_ui_bundle()
+        providers = _restore_ui_bundle_providers(ui_bundle["providers"], workers_raw)
         source_path = resolve_ui_dispatch_root_path()
         writable = _bundle_writable(source_path)
         mode_info = DispatchModeInfo(
@@ -213,7 +214,6 @@ def read_dispatch_settings(mode: DispatchSettingsMode | None = None) -> Dispatch
             last_validation_error=_read_validation_error(),
         )
         mcp_servers = ui_bundle["mcp_servers"]
-        providers = ui_bundle["providers"]
         skills = ui_bundle["skills"]
         worker_bindings = ui_bundle["worker_bindings"]
     else:
@@ -655,6 +655,52 @@ def _read_ui_bundle() -> dict[str, Any]:
         "skills": [SkillSettings.model_validate(item) for item in skills_raw],
         "worker_bindings": [WorkerBindingSettings.model_validate(item) for item in bindings_raw],
     }
+
+
+def _restore_ui_bundle_providers(
+    existing_providers: list[ProviderSettings],
+    compiled_workers_raw: list[dict[str, Any]],
+) -> list[ProviderSettings]:
+    inferred_providers = _providers_from_file_workers(compiled_workers_raw)
+    if not inferred_providers:
+        return existing_providers
+
+    existing_by_id = {provider.id: provider for provider in existing_providers if provider.id}
+    restored: list[ProviderSettings] = []
+    changed = False
+
+    for inferred in inferred_providers:
+        current = existing_by_id.get(inferred.id)
+        if current is None:
+            restored.append(inferred)
+            changed = True
+            continue
+
+        merged = ProviderSettings.model_validate(
+            {
+                **current.model_dump(),
+                "name": current.name or inferred.name,
+                "kind": current.kind or inferred.kind,
+                "base_url": current.base_url or inferred.base_url,
+                "has_auth_token": current.has_auth_token or inferred.has_auth_token,
+                "extra_env": current.extra_env or inferred.extra_env,
+            }
+        )
+        restored.append(merged)
+        if merged.model_dump() != current.model_dump():
+            changed = True
+
+    extra_providers = [provider for provider in existing_providers if provider.id not in {item.id for item in restored}]
+    if extra_providers:
+        restored.extend(extra_providers)
+
+    if changed or len(restored) != len(existing_providers):
+        _write_json(
+            resolve_ui_dispatch_root_path() / _PROVIDERS_FILENAME,
+            [provider.model_dump() for provider in restored],
+        )
+
+    return restored
 
 
 def _rewrite_ui_bundle_skill_aliases(*, old_skill_name: str, new_skill_id: str, new_skill_path: str) -> None:

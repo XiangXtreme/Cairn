@@ -115,7 +115,7 @@ class DispatchWorkerSettings(BaseModel):
 
 
 class DispatchModeInfo(BaseModel):
-    mode: DispatchSettingsMode = "file"
+    mode: DispatchSettingsMode = "ui"
     source_path: str
     compiled_path: str
     hot_reload_enabled: bool = True
@@ -211,7 +211,7 @@ class DiscoveredSkill(BaseModel):
 
 
 class SkillZipImportRequest(BaseModel):
-    mode: DispatchSettingsMode = "file"
+    mode: DispatchSettingsMode = "ui"
     filename: str
     content_base64: str
 
@@ -246,7 +246,7 @@ class WorkerBindingSettings(BaseModel):
 
 
 class DispatchSettings(BaseModel):
-    mode: DispatchSettingsMode = "file"
+    mode: DispatchSettingsMode = "ui"
     path: str
     writable: bool
     runtime: DispatchRuntimeSettings
@@ -261,7 +261,7 @@ class DispatchSettings(BaseModel):
 
 
 class UpdateDispatchSettingsRequest(BaseModel):
-    mode: DispatchSettingsMode = "file"
+    mode: DispatchSettingsMode = "ui"
     runtime: DispatchRuntimeSettings
     tasks: DispatchTaskSettings
     workers: list[DispatchWorkerSettings]
@@ -272,7 +272,7 @@ class UpdateDispatchSettingsRequest(BaseModel):
 
 
 class WorkerHealthcheckRequest(BaseModel):
-    mode: DispatchSettingsMode = "file"
+    mode: DispatchSettingsMode = "ui"
     runtime: DispatchRuntimeSettings | None = None
     worker: DispatchWorkerSettings
     providers: list[ProviderSettings] = Field(default_factory=list)

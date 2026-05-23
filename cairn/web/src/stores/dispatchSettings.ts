@@ -155,7 +155,7 @@ function serializeWorker(worker: EditableWorkerSettings) {
 
 function defaultModeInfo(): DispatchModeInfo {
   return {
-    mode: 'file',
+    mode: 'ui',
     source_path: '',
     compiled_path: '',
     hot_reload_enabled: true,
@@ -228,7 +228,7 @@ export const useDispatchSettingsStore = defineStore('dispatchSettings', () => {
   const ui = useUiStore();
   const leaseSettings = reactive<LeaseSettings>({ intent_timeout: 5, reason_timeout: 5 });
   const form = reactive<EditableDispatchForm>(defaultForm());
-  const mode = ref<DispatchSettingsMode>('file');
+  const mode = ref<DispatchSettingsMode>('ui');
   const meta = reactive({
     path: '',
     writable: false,
@@ -292,11 +292,11 @@ export const useDispatchSettingsStore = defineStore('dispatchSettings', () => {
     ui.showToast('服务端超时已保存', 'success');
   }
 
-  async function loadDispatchSettings(nextMode?: DispatchSettingsMode) {
+  async function loadDispatchSettings() {
     isLoading.value = true;
     loadError.value = '';
     try {
-      const settings = await api.getDispatchSettings(nextMode || mode.value || undefined);
+      const settings = await api.getDispatchSettings();
       applyDispatchSettings(settings);
     } catch (error) {
       loadError.value = error instanceof Error ? error.message : String(error);
@@ -304,12 +304,6 @@ export const useDispatchSettingsStore = defineStore('dispatchSettings', () => {
     } finally {
       isLoading.value = false;
     }
-  }
-
-  async function setMode(nextMode: DispatchSettingsMode) {
-    if (nextMode === mode.value) return;
-    mode.value = nextMode;
-    await loadDispatchSettings(nextMode);
   }
 
   function serializePayload(): UpdateDispatchSettingsRequest {
@@ -643,12 +637,12 @@ export const useDispatchSettingsStore = defineStore('dispatchSettings', () => {
   }
 
   async function syncResources() {
-    await loadDispatchSettings(mode.value);
+    await loadDispatchSettings();
   }
 
   async function discoverSkills() {
     try {
-      discoveredSkills.value = await api.discoverSkills(mode.value);
+      discoveredSkills.value = await api.discoverSkills();
       ui.showToast('Skill 扫描完成', 'success');
     } catch (error) {
       ui.showToast(error instanceof Error ? error.message : String(error), 'error');
@@ -699,7 +693,6 @@ export const useDispatchSettingsStore = defineStore('dispatchSettings', () => {
     loadLeaseSettings,
     saveLeaseSettings,
     loadDispatchSettings,
-    setMode,
     saveDispatchSettings,
     testWorkerHealthcheck,
     addWorker,

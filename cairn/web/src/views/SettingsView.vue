@@ -125,8 +125,7 @@ function formatTime(value: string | null | undefined) {
                 <h3 class="mt-1 text-lg font-semibold tracking-tight text-slate-900">运行参数</h3>
               </div>
               <div class="flex flex-wrap items-center gap-2">
-                <AppButton :variant="store.mode === 'file' ? 'primary' : 'secondary'" @click="store.setMode('file')">配置文件</AppButton>
-                <AppButton :variant="store.mode === 'ui' ? 'primary' : 'secondary'" @click="store.setMode('ui')">UI 配置</AppButton>
+                <BadgePill tone="sky">当前模式 {{ store.mode === 'ui' ? 'UI 配置' : '配置文件' }}</BadgePill>
                 <AppButton :icon="RefreshCw" @click="store.loadDispatchSettings()">重新加载</AppButton>
               </div>
             </div>
@@ -137,6 +136,9 @@ function formatTime(value: string | null | undefined) {
                 <BadgePill :tone="store.meta.hot_reload_enabled ? 'teal' : 'amber'">{{ store.meta.hot_reload_enabled ? '热加载开启' : '热加载关闭' }}</BadgePill>
                 <span class="text-xs text-slate-500">最近编译：{{ formatTime(store.meta.compiled_updated_at) }}</span>
               </div>
+              <p class="mt-3 text-xs leading-5 text-slate-500">
+                配置来源由服务启动参数决定。未显式指定时，默认使用 UI 配置。
+              </p>
               <div class="mt-3 grid grid-cols-1 gap-2 text-xs text-slate-500 xl:grid-cols-2">
                 <div class="min-w-0">
                   <span class="text-slate-400">当前生效来源：</span>
