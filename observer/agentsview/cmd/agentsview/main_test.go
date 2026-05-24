@@ -27,7 +27,7 @@ func TestMustLoadConfig(t *testing.T) {
 		{
 			name:          "DefaultArgs",
 			args:          []string{},
-			wantHost:      "127.0.0.1",
+			wantHost:      "0.0.0.0",
 			wantPort:      8080,
 			wantPublicURL: "",
 			wantProxyMode: "",
@@ -43,7 +43,7 @@ func TestMustLoadConfig(t *testing.T) {
 		{
 			name:          "PartialFlags",
 			args:          []string{"--port", "3000"},
-			wantHost:      "127.0.0.1",
+			wantHost:      "0.0.0.0",
 			wantPort:      3000,
 			wantPublicURL: "",
 			wantProxyMode: "",

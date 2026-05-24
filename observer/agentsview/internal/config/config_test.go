@@ -152,10 +152,10 @@ func TestLoad_DefaultsWithoutFlags(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if cfg.Host != "127.0.0.1" {
+	if cfg.Host != "0.0.0.0" {
 		t.Errorf(
 			"Host = %q, want default %q",
-			cfg.Host, "127.0.0.1",
+			cfg.Host, "0.0.0.0",
 		)
 	}
 	if cfg.Port != 8080 {
@@ -188,8 +188,8 @@ func TestLoad_NilFlagSet(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if cfg.Host != "127.0.0.1" {
-		t.Errorf("Host = %q, want %q", cfg.Host, "127.0.0.1")
+	if cfg.Host != "0.0.0.0" {
+		t.Errorf("Host = %q, want %q", cfg.Host, "0.0.0.0")
 	}
 }
 

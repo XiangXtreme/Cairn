@@ -180,7 +180,7 @@ func Default() (Config, error) {
 	}
 
 	return Config{
-		Host:                           "127.0.0.1",
+		Host:                           "0.0.0.0",
 		Port:                           8080,
 		DataDir:                        dataDir,
 		DBPath:                         filepath.Join(dataDir, "sessions.db"),
