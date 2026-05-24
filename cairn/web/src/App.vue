@@ -2,8 +2,8 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 
 import ToastHost from '@/components/ui/ToastHost.vue';
-import LegacyWorkspace from '@/views/LegacyWorkspace.vue';
 import SettingsView from '@/views/SettingsView.vue';
+import WorkspaceView from '@/views/WorkspaceView.vue';
 
 const hash = ref(window.location.hash || '#/');
 
@@ -21,12 +21,12 @@ onUnmounted(() => {
 
 const route = computed(() => {
   if (hash.value === '#/settings') return 'settings';
-  return 'legacy';
+  return 'workspace';
 });
 </script>
 
 <template>
   <SettingsView v-if="route === 'settings'" />
-  <LegacyWorkspace v-else />
+  <WorkspaceView v-else />
   <ToastHost />
 </template>
