@@ -55,6 +55,45 @@ server_pidfile="$repo_root/datas/cairn/server.pid"
 dispatcher_pidfile="$repo_root/datas/cairn/dispatcher.pid"
 observer_pidfile="$repo_root/datas/cairn/observer.pid"
 
+stop_pid_if_running() {
+  local pid="$1"
+  if [[ -z "$pid" ]]; then
+    return 1
+  fi
+  if ! ps -p "$pid" >/dev/null 2>&1; then
+    return 1
+  fi
+
+  kill "$pid" >/dev/null 2>&1 || true
+  sleep 1
+  if ps -p "$pid" >/dev/null 2>&1; then
+    kill -9 "$pid" >/dev/null 2>&1 || true
+  fi
+  return 0
+}
+
+find_repo_process_pids() {
+  local pattern="$1"
+  pgrep -af "$pattern" | awk -v repo="$repo_root" 'index($0, repo) { print $1 }'
+}
+
+stop_repo_processes() {
+  local label="$1"
+  local pattern="$2"
+  local pids
+  pids="$(find_repo_process_pids "$pattern" || true)"
+  if [[ -z "$pids" ]]; then
+    return
+  fi
+
+  while read -r pid; do
+    [[ -n "$pid" ]] || continue
+    if stop_pid_if_running "$pid"; then
+      echo "$label: stopped stale pid=$pid"
+    fi
+  done <<<"$pids"
+}
+
 stop_from_pidfile() {
   local label="$1"
   local pidfile="$2"
@@ -71,12 +110,7 @@ stop_from_pidfile() {
     return
   fi
 
-  if ps -p "$pid" >/dev/null 2>&1; then
-    kill "$pid" >/dev/null 2>&1 || true
-    sleep 1
-    if ps -p "$pid" >/dev/null 2>&1; then
-      kill -9 "$pid" >/dev/null 2>&1 || true
-    fi
+  if stop_pid_if_running "$pid"; then
     echo "$label: stopped pid=$pid"
   else
     echo "$label: pid $pid already exited"
@@ -89,10 +123,12 @@ echo "Stopping local Cairn processes"
 
 if [[ "$stop_server" == "1" ]]; then
   stop_from_pidfile "server" "$server_pidfile"
+  stop_repo_processes "server" "$repo_root/cairn/.venv/bin/cairn serve --host 0.0.0.0 --port 8000"
 fi
 
 if [[ "$stop_dispatcher" == "1" ]]; then
   stop_from_pidfile "dispatcher" "$dispatcher_pidfile"
+  stop_repo_processes "dispatcher" "$repo_root/cairn/.venv/bin/cairn dispatch"
 fi
 
 if [[ "$stop_observer" == "1" ]]; then

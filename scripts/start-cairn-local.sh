@@ -89,18 +89,92 @@ common_env=(
   "PYTHONPATH=$repo_root/cairn/src"
 )
 
+wait_for_port() {
+  local port="$1"
+  local timeout_secs="${2:-15}"
+  local start_ts
+  start_ts="$(date +%s)"
+  while true; do
+    if ss -ltn "( sport = :$port )" | tail -n +2 | grep -q .; then
+      return 0
+    fi
+    if (( $(date +%s) - start_ts >= timeout_secs )); then
+      return 1
+    fi
+    sleep 1
+  done
+}
+
+stop_pid_if_running() {
+  local pid="$1"
+  if [[ -z "$pid" ]]; then
+    return
+  fi
+  if ps -p "$pid" >/dev/null 2>&1; then
+    kill "$pid" >/dev/null 2>&1 || true
+    sleep 1
+    if ps -p "$pid" >/dev/null 2>&1; then
+      kill -9 "$pid" >/dev/null 2>&1 || true
+    fi
+  fi
+}
+
+find_repo_process_pids() {
+  local pattern="$1"
+  pgrep -af "$pattern" | awk -v repo="$repo_root" 'index($0, repo) { print $1 }'
+}
+
+stop_repo_processes() {
+  local pattern="$1"
+  local label="$2"
+  local pids
+  pids="$(find_repo_process_pids "$pattern" || true)"
+  if [[ -z "$pids" ]]; then
+    return
+  fi
+
+  while read -r pid; do
+    [[ -n "$pid" ]] || continue
+    stop_pid_if_running "$pid"
+    echo "$label: stopped stale pid=$pid"
+  done <<<"$pids"
+}
+
+start_background_process() {
+  local pidfile="$1"
+  local logfile="$2"
+  shift 2
+
+  : >"$logfile"
+  nohup env "${common_env[@]}" "$@" >>"$logfile" 2>&1 </dev/null &
+  local pid=$!
+  echo "$pid" >"$pidfile"
+  echo "$pid"
+}
+
 start_server_cmd() {
   if [[ -f "$server_pidfile" ]]; then
     old_pid="$(cat "$server_pidfile" 2>/dev/null || true)"
-    if [[ -n "${old_pid:-}" ]] && ps -p "$old_pid" >/dev/null 2>&1; then
-      kill "$old_pid" >/dev/null 2>&1 || true
-      sleep 1
-    fi
+    stop_pid_if_running "${old_pid:-}"
   fi
+  stop_repo_processes "$repo_root/cairn/.venv/bin/cairn serve --host 0.0.0.0 --port 8000" "server"
 
-  bash -lc "cd '$repo_root' && setsid env ${common_env[*]@Q} '$repo_root/cairn/.venv/bin/cairn' serve --host 0.0.0.0 --port 8000 --db-path '$db_path' >'$server_log' 2>&1 < /dev/null & echo \$!" >"$server_pidfile"
-  server_pid="$(cat "$server_pidfile")"
-  echo "$server_pid" >"$server_pidfile"
+  server_pid="$(
+    cd "$repo_root" &&
+      start_background_process \
+        "$server_pidfile" \
+        "$server_log" \
+        "$repo_root/cairn/.venv/bin/cairn" \
+        serve \
+        --host 0.0.0.0 \
+        --port 8000 \
+        --db-path "$db_path"
+  )"
+  if ! wait_for_port 8000 15; then
+    echo "Server failed to bind 0.0.0.0:8000" >&2
+    tail -n 40 "$server_log" >&2 || true
+    exit 1
+  fi
   echo "Server started: pid=$server_pid"
   echo "  db:   $db_path"
   echo "  log:  $server_log"
@@ -109,15 +183,24 @@ start_server_cmd() {
 start_dispatcher_cmd() {
   if [[ -f "$dispatcher_pidfile" ]]; then
     old_pid="$(cat "$dispatcher_pidfile" 2>/dev/null || true)"
-    if [[ -n "${old_pid:-}" ]] && ps -p "$old_pid" >/dev/null 2>&1; then
-      kill "$old_pid" >/dev/null 2>&1 || true
-      sleep 1
-    fi
+    stop_pid_if_running "${old_pid:-}"
   fi
+  stop_repo_processes "$repo_root/cairn/.venv/bin/cairn dispatch" "dispatcher"
 
-  bash -lc "cd '$repo_root' && setsid env ${common_env[*]@Q} '$repo_root/cairn/.venv/bin/cairn' dispatch >'$dispatcher_log' 2>&1 < /dev/null & echo \$!" >"$dispatcher_pidfile"
-  dispatcher_pid="$(cat "$dispatcher_pidfile")"
-  echo "$dispatcher_pid" >"$dispatcher_pidfile"
+  dispatcher_pid="$(
+    cd "$repo_root" &&
+      start_background_process \
+        "$dispatcher_pidfile" \
+        "$dispatcher_log" \
+        "$repo_root/cairn/.venv/bin/cairn" \
+        dispatch
+  )"
+  sleep 1
+  if ! ps -p "$dispatcher_pid" >/dev/null 2>&1; then
+    echo "Dispatcher failed to stay running" >&2
+    tail -n 40 "$dispatcher_log" >&2 || true
+    exit 1
+  fi
   echo "Dispatcher started: pid=$dispatcher_pid"
   echo "  mode: $mode"
   echo "  log:  $dispatcher_log"
