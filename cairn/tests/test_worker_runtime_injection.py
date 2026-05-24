@@ -175,6 +175,52 @@ def test_runtime_injection_materializes_project_skill_directories(tmp_path: Path
     assert (agents_skill_dir / "SKILL.md").exists()
 
 
+def test_runtime_injection_remaps_ui_registry_skill_paths_for_container_mounts(tmp_path: Path, monkeypatch) -> None:
+    mounted_data_root = tmp_path / "mounted-cairn-data"
+    mounted_skill_dir = mounted_data_root / "registry" / "skills" / "web-ai"
+    mounted_skill_dir.mkdir(parents=True)
+    (mounted_skill_dir / "SKILL.md").write_text("# Web AI\n\nMounted skill.\n", encoding="utf-8")
+    monkeypatch.setenv("CAIRN_UI_DISPATCH_CONFIG", str(mounted_data_root / "dispatch_ui.yaml"))
+
+    host_only_path = "/host-only/Cairn/datas/cairn/registry/skills/web-ai"
+    assert not Path(host_only_path).is_dir()
+    worker = WorkerConfig(
+        name="codex_main",
+        type="codex",
+        enabled=True,
+        task_types=["reason"],
+        max_running=1,
+        priority=0,
+        env={
+            "CODEX_MODEL": "gpt-5.5",
+            "CODEX_BASE_URL": "https://ai.example.test/v1",
+            "OPENAI_API_KEY": "sk-test",
+            "CAIRN_SKILLS": json.dumps(
+                [
+                    {
+                        "id": "web-ai",
+                        "name": "Web AI",
+                        "path": host_only_path,
+                        "description": "Mounted registry skill",
+                    }
+                ]
+            ),
+        },
+    )
+    runtime = LocalRuntimeManager(ExecutionConfig(backend="local", work_dir=tmp_path / "runtime-remap"))
+    workspace_name = runtime.ensure_running("proj_skill_remap")
+
+    env_updates = prepare_worker_runtime_files(runtime, workspace_name, worker)
+
+    runtime_skill_dir = Path(env_updates["CAIRN_SKILL_PATHS"])
+    assert runtime_skill_dir.exists()
+    assert (runtime_skill_dir / "SKILL.md").read_text(encoding="utf-8").startswith("# Web AI")
+
+    codex_home = Path(env_updates["CODEX_HOME"])
+    assert (codex_home / "skills" / "web-ai" / "SKILL.md").exists()
+    assert (codex_home / ".agents" / "skills" / "web-ai" / "SKILL.md").exists()
+
+
 def test_claude_runtime_injection_materializes_skill_directories(tmp_path: Path) -> None:
     skill_dir = tmp_path / "project-skills" / "redirect-bypass"
     skill_dir.mkdir(parents=True)

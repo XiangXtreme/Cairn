@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
 from pathlib import Path
 from pathlib import PurePath
 
 from cairn.dispatcher.config import WorkerConfig
 from cairn.dispatcher.runtime.manager import RuntimeManager
+
+LOG = logging.getLogger(__name__)
 
 _PROVIDER_SPEC_ENV = "CAIRN_PROVIDER_SPEC"
 _MCP_SERVERS_ENV = "CAIRN_MCP_SERVERS"
@@ -104,16 +108,27 @@ def _materialize_skill_directories(
         skill_id = str(item.get("id", "")).strip() or "skill"
         if not source_path:
             continue
+        resolved_source_path = _resolve_visible_skill_source_path(source_path)
         try:
             target_path = runtime_manager.copy_directory(
                 workspace_name,
-                source_path,
+                resolved_source_path,
                 str(PurePath(".cairn") / "skills-src" / worker.name / skill_id),
             )
-        except Exception:
+        except Exception as exc:
+            LOG.warning(
+                "failed to materialize skill directory workspace=%s worker=%s skill=%s source=%s resolved_source=%s error=%s",
+                workspace_name,
+                worker.name,
+                skill_id,
+                source_path,
+                resolved_source_path,
+                exc,
+            )
             continue
         item["source_path"] = source_path
         item.setdefault("original_path", source_path)
+        item["visible_source_path"] = resolved_source_path
         item["runtime_path"] = target_path
         item["path"] = target_path
         paths.append(target_path)
@@ -325,12 +340,71 @@ def _materialize_app_skill_views(
         if not source_path:
             continue
         item.setdefault("original_path", source_path)
+        resolved_source_path = _resolve_visible_skill_source_path(source_path)
         for base_dir in base_dirs:
             try:
                 runtime_manager.copy_directory(
                     workspace_name,
-                    source_path,
+                    resolved_source_path,
                     str(base_dir / skill_id),
                 )
-            except Exception:
+            except Exception as exc:
+                LOG.warning(
+                    "failed to materialize app skill view workspace=%s worker=%s skill=%s source=%s resolved_source=%s target=%s error=%s",
+                    workspace_name,
+                    worker.name,
+                    skill_id,
+                    source_path,
+                    resolved_source_path,
+                    base_dir / skill_id,
+                    exc,
+                )
                 continue
+
+
+def _resolve_visible_skill_source_path(source_path: str) -> str:
+    source = Path(source_path).expanduser()
+    if source.is_dir():
+        return str(source)
+
+    candidates: list[Path] = []
+    ui_config = os.getenv("CAIRN_UI_DISPATCH_CONFIG", "").strip()
+    if ui_config:
+        ui_root = Path(ui_config).expanduser().parent
+        candidates.extend(_remap_data_dir_suffix(source_path, ui_root))
+        candidates.extend(_remap_named_suffix(source_path, "registry/skills", ui_root / "registry" / "skills"))
+
+    dispatch_config = os.getenv("CAIRN_DISPATCH_CONFIG", "").strip()
+    if dispatch_config:
+        repo_root = Path(dispatch_config).expanduser().parent
+        candidates.extend(_remap_named_suffix(source_path, "skills", repo_root / "skills"))
+
+    candidates.extend(_remap_named_suffix(source_path, "registry/skills", Path.cwd() / "datas" / "cairn" / "registry" / "skills"))
+    candidates.extend(_remap_named_suffix(source_path, "skills", Path.cwd() / "skills"))
+
+    for candidate in candidates:
+        if candidate.is_dir():
+            return str(candidate)
+    return source_path
+
+
+def _remap_data_dir_suffix(source_path: str, data_root: Path) -> list[Path]:
+    marker = "/datas/cairn/"
+    normalized = source_path.replace("\\", "/")
+    if marker not in normalized:
+        return []
+    suffix = normalized.split(marker, 1)[1].strip("/")
+    return [data_root / PurePath(suffix)] if suffix else []
+
+
+def _remap_named_suffix(source_path: str, marker: str, target_root: Path) -> list[Path]:
+    normalized = source_path.replace("\\", "/").strip("/")
+    marker = marker.strip("/")
+    parts = PurePath(normalized).parts
+    marker_parts = PurePath(marker).parts
+    marker_len = len(marker_parts)
+    for index in range(0, len(parts) - marker_len + 1):
+        if parts[index : index + marker_len] == marker_parts:
+            suffix = PurePath(*parts[index + marker_len :])
+            return [target_root / suffix] if str(suffix) != "." else [target_root]
+    return []
