@@ -32,7 +32,7 @@ const emit = defineEmits<{
       detail="Create a project to populate the list, detail view, graph, and timeline."
     />
 
-    <div v-else class="grid grid-cols-1 gap-4 xl:grid-cols-2 2xl:grid-cols-3">
+    <div v-else class="space-y-4">
       <ProjectCard
         v-for="project in projects"
         :key="project.id"

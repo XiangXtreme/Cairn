@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia';
-import { computed, onMounted, onUnmounted, reactive } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 
 import ModalShell from '@/components/ui/ModalShell.vue';
 import AppButton from '@/components/ui/AppButton.vue';
@@ -24,6 +24,7 @@ const workspaceUi = useWorkspaceUiStore();
 const workspaceRefs = storeToRefs(workspace);
 const projectRefs = storeToRefs(projectStore);
 const workspaceUiRefs = storeToRefs(workspaceUi);
+const routeHash = ref(window.location.hash || '#/');
 
 const forms = reactive({
   create: { title: '', origin: '', goal: '', hint: '' },
@@ -37,10 +38,10 @@ const forms = reactive({
 });
 
 const currentRouteProjectId = computed(() => {
-  const hash = window.location.hash || '#/';
-  const match = hash.match(/^#\/projects\/(.+)$/);
+  const match = routeHash.value.match(/^#\/projects\/(.+)$/);
   return match ? decodeURIComponent(match[1]) : '';
 });
+const isProjectDetailRoute = computed(() => Boolean(currentRouteProjectId.value));
 
 const selectedProjectTitle = computed(() => projectRefs.project.value?.project.title || '');
 const selectedFactId = computed(() => (projectRefs.selectedNode.value?.type === 'fact' ? projectRefs.selectedNode.value.id : null));
@@ -76,6 +77,9 @@ async function refresh() {
 
 async function openProject(projectId: string) {
   workspace.setSelectedProject(projectId);
+  if (projectRefs.project.value?.project.id !== projectId) {
+    await projectStore.loadProject(projectId);
+  }
   window.location.hash = `#/projects/${encodeURIComponent(projectId)}`;
 }
 
@@ -246,11 +250,13 @@ function closeModal() {
 }
 
 function onHashChange() {
+  routeHash.value = window.location.hash || '#/';
   void syncRoute();
 }
 
 onMounted(async () => {
   window.addEventListener('hashchange', onHashChange);
+  routeHash.value = window.location.hash || '#/';
   await workspace.loadProjects();
   await syncRoute();
   workspace.startPolling(refresh);
@@ -273,23 +279,25 @@ onUnmounted(() => {
     />
 
     <main class="space-y-5 px-4 py-5 lg:px-6 xl:px-8">
-      <WorkspaceOverview
-        :active-count="workspaceRefs.activeCount.value"
-        :stopped-count="workspaceRefs.stoppedCount.value"
-        :completed-count="workspaceRefs.completedCount.value"
-        :selected-project-id="workspaceRefs.selectedProjectId.value"
-      />
+      <template v-if="!isProjectDetailRoute">
+        <WorkspaceOverview
+          :active-count="workspaceRefs.activeCount.value"
+          :stopped-count="workspaceRefs.stoppedCount.value"
+          :completed-count="workspaceRefs.completedCount.value"
+          :selected-project-id="workspaceRefs.selectedProjectId.value"
+        />
 
-      <ProjectSection
-        :projects="workspaceRefs.projects.value"
-        :selected-project-id="workspaceRefs.selectedProjectId.value"
-        @open="openProject"
-        @preview="openPreview"
-        @toggle="toggleProjectStatus"
-        @delete="askDelete"
-      />
+        <ProjectSection
+          :projects="workspaceRefs.projects.value"
+          :selected-project-id="workspaceRefs.selectedProjectId.value"
+          @open="openProject"
+          @preview="openPreview"
+          @toggle="toggleProjectStatus"
+          @delete="askDelete"
+        />
+      </template>
 
-      <section v-if="projectRefs.project.value" class="grid grid-cols-1 gap-5 2xl:grid-cols-[minmax(0,1fr)_380px]">
+      <section v-else-if="projectRefs.project.value" class="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_340px]">
         <div class="min-w-0 space-y-5">
           <ProjectReplayBar
             :replay="projectRefs.replay.value"

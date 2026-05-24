@@ -32,6 +32,8 @@ const emit = defineEmits<{
 
 const container = ref<HTMLDivElement | null>(null);
 let cy: any = null;
+let initTimer: number | null = null;
+let viewportTimer: number | null = null;
 
 const layoutModes: Array<{ id: LayoutMode; label: string }> = [
   { id: 'dagre_tb', label: 'Dagre TB' },
@@ -46,6 +48,19 @@ const headerLabel = computed(() => {
   const engine = layoutEngine(props.layoutMode).toUpperCase();
   return `${engine} / ${layoutDirection(props.layoutMode)}`;
 });
+
+const graphHeightClass = computed(() =>
+  layoutDirection(props.layoutMode) === 'LR'
+    ? 'h-[clamp(540px,62vh,820px)]'
+    : 'h-[clamp(560px,68vh,900px)]',
+);
+
+function summarizeEdgeLabel(label: string) {
+  const normalized = label.replace(/\s+/g, ' ').trim();
+  return Array.from(normalized).length <= 42
+    ? normalized
+    : `${Array.from(normalized).slice(0, 42).join('')}...`;
+}
 
 function buildElements() {
   const nodes: any[] = [];
@@ -74,7 +89,7 @@ function buildElements() {
             source: sourceId,
             target: intent.to,
             intentId: intent.id,
-            label: intent.description,
+            label: summarizeEdgeLabel(intent.description),
             status: 'concluded',
           },
         });
@@ -103,8 +118,21 @@ function buildElements() {
           source: sourceId,
           target: placeholderId,
           intentId: intent.id,
-          label: intent.description,
+          label: summarizeEdgeLabel(intent.description),
           status: nodeType,
+        },
+      });
+    }
+    if (isBootstrapIntent(intent)) {
+      edges.push({
+        data: {
+          id: `${intent.id}_goal`,
+          source: placeholderId,
+          target: 'goal',
+          intentId: intent.id,
+          label: '',
+          status: nodeType,
+          edgeType: 'bootstrap_scope',
         },
       });
     }
@@ -150,6 +178,8 @@ function graphStyle() {
         color: '#64748b',
         'text-rotation': 'autorotate',
         'text-margin-y': -9,
+        'text-max-width': '80px',
+        'text-wrap': 'ellipsis',
         'text-background-color': '#f8fafc',
         'text-background-opacity': 0.86,
         'text-background-padding': '2px',
@@ -160,6 +190,7 @@ function graphStyle() {
     { selector: 'edge[status="in_progress"]', style: { 'line-color': '#fbbf24', 'target-arrow-color': '#fbbf24', 'line-style': 'dashed' } },
     { selector: 'edge[status="bootstrap_pending"]', style: { 'line-color': '#fdba74', 'target-arrow-color': '#fdba74', 'line-style': 'dashed' } },
     { selector: 'edge[status="bootstrap_running"]', style: { 'line-color': '#fb923c', 'target-arrow-color': '#fb923c', 'line-style': 'dashed' } },
+    { selector: 'edge[edgeType="bootstrap_scope"]', style: { label: '', width: 1.8, 'curve-style': 'bezier', 'line-style': 'dotted', 'line-dash-pattern': [2, 5], 'target-arrow-shape': 'triangle-backcurve', 'arrow-scale': 0.75, 'target-distance-from-node': 2 } },
     { selector: '.selected', style: { 'border-width': 4, 'border-color': '#312e81', 'underlay-color': '#c7d2fe', 'underlay-padding': 8, 'underlay-opacity': 0.5 } },
     { selector: '.faded', style: { opacity: 0.38 } },
   ];
@@ -168,18 +199,24 @@ function graphStyle() {
 function layoutOptions(animate = true) {
   const direction = layoutDirection(props.layoutMode);
   const engine = layoutEngine(props.layoutMode);
+  const basePadding = 36;
   if (engine === 'elk') {
     return {
       name: 'elk',
       fit: true,
-      padding: 48,
+      padding: basePadding,
       animate,
       animationDuration: 300,
       elk: {
         algorithm: 'layered',
         'elk.direction': direction === 'TB' ? 'DOWN' : 'RIGHT',
+        'elk.aspectRatio': '1.5',
+        'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
+        'elk.spacing.nodeNode': '50',
         'elk.layered.spacing.nodeNodeBetweenLayers': '80',
-        'elk.spacing.nodeNode': '40',
+        'elk.spacing.edgeNode': '25',
+        'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+        'elk.layered.nodePlacement.bk.fixedAlignment': 'BALANCED',
       },
     };
   }
@@ -187,7 +224,7 @@ function layoutOptions(animate = true) {
     return {
       name: 'klay',
       fit: true,
-      padding: 48,
+      padding: basePadding,
       animate,
       animationDuration: 300,
       klay: {
@@ -203,17 +240,10 @@ function layoutOptions(animate = true) {
     nodeSep: 56,
     rankSep: 76,
     fit: true,
-    padding: 48,
+    padding: basePadding,
     animate,
     animationDuration: 300,
   };
-}
-
-function registerPlugins() {
-  if (!window.cytoscape) return;
-  if (window.cytoscapeDagre) window.cytoscape.use(window.cytoscapeDagre);
-  if (window.cytoscapeKlay) window.cytoscape.use(window.cytoscapeKlay(window.klay));
-  if (window.cytoscapeElk) window.cytoscape.use(window.cytoscapeElk);
 }
 
 function applySelection() {
@@ -270,7 +300,6 @@ function applySelection() {
 
 function createGraph() {
   if (!container.value || !window.cytoscape) return;
-  registerPlugins();
   cy = window.cytoscape({
     container: container.value,
     elements: buildElements(),
@@ -292,16 +321,50 @@ function createGraph() {
     if (event.target === cy) emit('clear');
   });
   applySelection();
+  scheduleViewportBias();
+}
+
+function stopInitTimer() {
+  if (initTimer) window.clearTimeout(initTimer);
+  initTimer = null;
+}
+
+function stopViewportTimer() {
+  if (viewportTimer) window.clearTimeout(viewportTimer);
+  viewportTimer = null;
+}
+
+function scheduleViewportBias() {
+  if (!cy || !container.value) return;
+  if (layoutDirection(props.layoutMode) !== 'LR') return;
+  stopViewportTimer();
+  viewportTimer = window.setTimeout(() => {
+    if (!cy || !container.value) return;
+    cy.panBy({ x: 0, y: Math.round(container.value.clientHeight * 0.09) });
+  }, 60);
+}
+
+function ensureGraph() {
+  if (cy || !container.value) return;
+  if (window.cytoscape) {
+    createGraph();
+    return;
+  }
+  stopInitTimer();
+  initTimer = window.setTimeout(() => {
+    ensureGraph();
+  }, 120);
 }
 
 function rebuild() {
   if (!cy) {
-    createGraph();
+    ensureGraph();
     return;
   }
   cy.json({ elements: buildElements() });
   cy.layout(layoutOptions()).run();
   applySelection();
+  scheduleViewportBias();
 }
 
 function fitGraph() {
@@ -320,17 +383,23 @@ function centerOnSelection() {
 }
 
 onMounted(() => {
-  createGraph();
+  ensureGraph();
 });
 
 onBeforeUnmount(() => {
+  stopInitTimer();
+  stopViewportTimer();
   if (cy) cy.destroy();
   cy = null;
 });
 
 watch(() => props.project, rebuild, { deep: true });
 watch(() => props.layoutMode, () => {
-  if (cy) cy.layout(layoutOptions()).run();
+  if (cy) {
+    cy.resize();
+    cy.layout(layoutOptions()).run();
+    scheduleViewportBias();
+  }
 });
 watch(() => [props.selectedNode, props.selectedFacts], () => {
   applySelection();
@@ -359,6 +428,11 @@ watch(() => [props.selectedNode, props.selectedFacts], () => {
         <AppButton :icon="Maximize2" size="sm" @click="fitGraph">Fit</AppButton>
       </div>
     </div>
-    <div ref="container" class="h-[620px] w-full rounded-b-[28px] bg-[radial-gradient(circle_at_top,_rgba(148,163,184,0.14),_transparent_55%)]" />
+    <div
+      ref="container"
+      data-graph-canvas
+      class="w-full rounded-b-[28px] bg-[radial-gradient(circle_at_top,_rgba(148,163,184,0.14),_transparent_55%)]"
+      :class="graphHeightClass"
+    />
   </section>
 </template>
