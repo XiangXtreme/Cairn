@@ -13,11 +13,14 @@ import ProjectSection from '@/components/workspace/ProjectSection.vue';
 import ProjectSidebar from '@/components/workspace/ProjectSidebar.vue';
 import WorkspaceHeader from '@/components/workspace/WorkspaceHeader.vue';
 import WorkspaceOverview from '@/components/workspace/WorkspaceOverview.vue';
+import { api } from '@/api/client';
 import { useProjectStore } from '@/stores/project';
+import { useUiStore } from '@/stores/ui';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { useWorkspaceUiStore } from '@/stores/workspaceUi';
 import { getProjectRunningState } from '@/utils/workspace';
 
+const ui = useUiStore();
 const workspace = useWorkspaceStore();
 const projectStore = useProjectStore();
 const workspaceUi = useWorkspaceUiStore();
@@ -36,6 +39,9 @@ const forms = reactive({
   reopen: { description: '' },
   intent: { description: '' },
   conclude: { description: '' },
+});
+const deleteState = reactive({
+  submitting: false,
 });
 
 const currentRouteProjectId = computed(() => {
@@ -103,10 +109,12 @@ async function toggleProjectStatus(projectId: string, nextStatus: 'active' | 'st
 }
 
 function askDelete(projectId?: string) {
-  if (projectId && projectRefs.project.value?.project.id !== projectId) {
-    workspace.setSelectedProject(projectId);
-    window.location.hash = `#/projects/${encodeURIComponent(projectId)}`;
-  }
+  const targetId = projectId || projectRefs.project.value?.project.id || workspace.selectedProjectId;
+  const targetProject =
+    workspaceRefs.projects.value.find((item) => item.id === targetId)
+    || (projectRefs.project.value?.project.id === targetId ? projectRefs.project.value.project : null);
+  workspaceUi.pendingDeleteProjectId = targetId || '';
+  workspaceUi.pendingDeleteProjectTitle = targetProject?.title || targetId || '';
   workspaceUi.openModal('delete');
 }
 
@@ -236,11 +244,44 @@ async function exitReplay() {
 }
 
 async function submitDelete() {
-  const deletingId = projectRefs.project.value?.project.id || workspace.selectedProjectId;
-  await projectStore.deleteProject();
-  workspace.removeProject(deletingId);
-  workspaceUi.closeModal();
-  goHome();
+  if (!workspaceUi.pendingDeleteProjectId || deleteState.submitting) return;
+  deleteState.submitting = true;
+  const deletingId = workspaceUi.pendingDeleteProjectId;
+  const deletingTitle = workspaceUi.pendingDeleteProjectTitle || deletingId;
+  const deletingCurrentDetail = projectRefs.project.value?.project.id === deletingId;
+  const finishDelete = async (toastMessage?: string) => {
+    workspace.removeProject(deletingId);
+    workspaceUi.closeModal();
+    if (deletingCurrentDetail || currentRouteProjectId.value === deletingId) {
+      projectStore.clearProject();
+      goHome();
+    }
+    await workspace.loadProjects();
+    if (toastMessage) {
+      ui.showToast(toastMessage, 'success');
+    }
+  };
+  try {
+    if (deletingCurrentDetail) {
+      await projectStore.deleteProject();
+    } else {
+      await api.deleteProject(deletingId);
+    }
+    await finishDelete(`已删除项目 ${deletingTitle}`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : `删除项目 ${deletingTitle} 失败`;
+    if (message === 'Project not found' || message === 'HTTP 404') {
+      await workspace.loadProjects();
+      const stillExists = workspace.projects.some((item) => item.id === deletingId);
+      if (!stillExists) {
+        await finishDelete(`已删除项目 ${deletingTitle}`);
+        return;
+      }
+    }
+    ui.showToast(message, 'error');
+  } finally {
+    deleteState.submitting = false;
+  }
 }
 
 async function openYaml() {
@@ -451,8 +492,22 @@ onUnmounted(() => {
 
     <ModalShell v-if="workspaceUiRefs.activeModal.value === 'delete'" title="删除项目" description="这个动作会删除数据库记录和运行时产物。" @close="closeModal">
       <div class="space-y-4 p-5">
-        <p class="text-sm text-slate-600">确认删除当前项目？这个动作不可撤销。</p>
-        <div class="flex justify-end"><AppButton variant="danger" @click="submitDelete">确认删除</AppButton></div>
+        <div class="rounded-2xl border border-rose-100 bg-rose-50/70 px-4 py-3">
+          <div class="text-xs font-medium uppercase tracking-[0.14em] text-rose-500">即将删除</div>
+          <div class="mt-1 text-sm font-semibold text-rose-900">
+            {{ workspaceUiRefs.pendingDeleteProjectTitle.value || workspaceUiRefs.pendingDeleteProjectId.value || '当前项目' }}
+          </div>
+          <div class="mt-1 text-xs text-rose-700">
+            {{ workspaceUiRefs.pendingDeleteProjectId.value }}
+          </div>
+        </div>
+        <p class="text-sm text-slate-600">确认删除这个项目？删除后会立即从列表中移除，且无法恢复。</p>
+        <div class="flex justify-end gap-2">
+          <AppButton :disabled="deleteState.submitting" @click="closeModal">取消</AppButton>
+          <AppButton variant="danger" :disabled="deleteState.submitting" @click="submitDelete">
+            {{ deleteState.submitting ? '删除中...' : '确认删除' }}
+          </AppButton>
+        </div>
       </div>
     </ModalShell>
 

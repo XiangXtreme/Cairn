@@ -134,14 +134,14 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="flex flex-wrap items-center justify-end gap-2">
-        <AppButton :icon="Eye" size="sm" variant="brand" @click="handleOpen">进入详情</AppButton>
-        <AppButton :icon="project.status === 'active' ? Pause : Play" size="sm" @click="handleToggle">
+        <AppButton :icon="Eye" size="sm" variant="brand" @click.stop="handleOpen">进入详情</AppButton>
+        <AppButton :icon="project.status === 'active' ? Pause : Play" size="sm" @click.stop="handleToggle">
           {{ project.status === 'active' ? '暂停' : '恢复' }}
         </AppButton>
-        <AppButton :icon="Copy" size="sm" @click="handleClone">克隆</AppButton>
+        <AppButton :icon="Copy" size="sm" @click.stop="handleClone">克隆</AppButton>
 
-        <div class="relative">
-          <AppButton :icon="ChevronDown" size="sm" @click="toggleMenu">更多</AppButton>
+        <div class="relative" @click.stop>
+          <AppButton :icon="ChevronDown" size="sm" @click.stop="toggleMenu">更多</AppButton>
           <div
             v-if="menuOpen"
             class="absolute right-0 top-[calc(100%+8px)] z-20 min-w-44 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl shadow-slate-200/70"
@@ -149,7 +149,7 @@ onBeforeUnmount(() => {
             <button
               type="button"
               class="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
-              @click="handlePreview"
+              @click.stop="handlePreview"
             >
               <Clock3 class="h-4 w-4" />
               <span>导出 / 时间线</span>
@@ -157,7 +157,7 @@ onBeforeUnmount(() => {
             <button
               type="button"
               class="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-rose-600 transition hover:bg-rose-50"
-              @click="handleDelete"
+              @click.stop="handleDelete"
             >
               <Trash2 class="h-4 w-4" />
               <span>删除项目</span>

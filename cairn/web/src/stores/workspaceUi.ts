@@ -26,6 +26,8 @@ export const useWorkspaceUiStore = defineStore('workspace-ui', () => {
   const yamlPreviewText = ref('');
   const projectListScrollTop = ref(0);
   const pendingIntentId = ref('');
+  const pendingDeleteProjectId = ref('');
+  const pendingDeleteProjectTitle = ref('');
 
   const sidePanelWidth = computed({
     get: () => prefs.value.sidePanelWidth,
@@ -61,6 +63,8 @@ export const useWorkspaceUiStore = defineStore('workspace-ui', () => {
   function closeModal() {
     activeModal.value = null;
     pendingIntentId.value = '';
+    pendingDeleteProjectId.value = '';
+    pendingDeleteProjectTitle.value = '';
   }
 
   return {
@@ -72,6 +76,8 @@ export const useWorkspaceUiStore = defineStore('workspace-ui', () => {
     yamlPreviewText,
     projectListScrollTop,
     pendingIntentId,
+    pendingDeleteProjectId,
+    pendingDeleteProjectTitle,
     sidePanelWidth,
     actorName,
     layoutMode,
