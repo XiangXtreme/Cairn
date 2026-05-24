@@ -189,7 +189,8 @@ func cairnSessionIDVariants(agentType string, sessionID string) []string {
 	case "codex":
 		variants = append(variants, "codex:"+strings.TrimPrefix(sessionID, "codex:"))
 	case "claudecode", "claude":
-		variants = append(variants, "claude:"+strings.TrimPrefix(sessionID, "claude:"))
+		raw := strings.TrimPrefix(sessionID, "claude:")
+		variants = append(variants, "claude:"+raw, "shared-"+raw)
 	case "pi":
 		variants = append(variants, "pi:"+strings.TrimPrefix(sessionID, "pi:"))
 	}

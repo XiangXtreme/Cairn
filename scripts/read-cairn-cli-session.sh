@@ -143,15 +143,15 @@ shift_field() {
 normalize_project() {
   local value="$1"
   if [[ "$value" =~ ^proj([0-9]+)$ ]]; then
-    printf "proj_%03d" "${BASH_REMATCH[1]}"
+    printf "proj_%03d" "$((10#${BASH_REMATCH[1]}))"
     return
   fi
   if [[ "$value" =~ ^proj_([0-9]+)$ ]]; then
-    printf "proj_%03d" "${BASH_REMATCH[1]}"
+    printf "proj_%03d" "$((10#${BASH_REMATCH[1]}))"
     return
   fi
   if [[ "$value" =~ ^cairn_dispatch_proj_([0-9]+)$ ]]; then
-    printf "proj_%03d" "${BASH_REMATCH[1]}"
+    printf "proj_%03d" "$((10#${BASH_REMATCH[1]}))"
     return
   fi
   printf "%s" "$value"
