@@ -22,3 +22,4 @@ observer/agentsview/html/
 cairn/web/node_modules/
 cairn/web/.vite/
 cairn/web/dist/
+.tmp/
