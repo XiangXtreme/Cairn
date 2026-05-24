@@ -89,6 +89,8 @@ common_env=(
   "PYTHONPATH=$repo_root/cairn/src"
 )
 
+started_pid=""
+
 wait_for_port() {
   local port="$1"
   local timeout_secs="${2:-15}"
@@ -140,16 +142,31 @@ stop_repo_processes() {
   done <<<"$pids"
 }
 
-start_background_process() {
-  local pidfile="$1"
-  local logfile="$2"
-  shift 2
+wait_for_process_match() {
+  local pattern="$1"
+  local timeout_secs="${2:-15}"
+  local start_ts
+  start_ts="$(date +%s)"
+  while true; do
+    local pid
+    pid="$(pgrep -af "$pattern" | awk -v repo="$repo_root" 'index($0, repo) { print $1; exit }')"
+    if [[ -n "$pid" ]]; then
+      started_pid="$pid"
+      return 0
+    fi
+    if (( $(date +%s) - start_ts >= timeout_secs )); then
+      return 1
+    fi
+    sleep 1
+  done
+}
+
+start_detached_process() {
+  local logfile="$1"
+  shift
 
   : >"$logfile"
-  nohup env "${common_env[@]}" "$@" >>"$logfile" 2>&1 </dev/null &
-  local pid=$!
-  echo "$pid" >"$pidfile"
-  echo "$pid"
+  setsid -f env "${common_env[@]}" "$@" >>"$logfile" 2>&1 </dev/null
 }
 
 start_server_cmd() {
@@ -159,17 +176,21 @@ start_server_cmd() {
   fi
   stop_repo_processes "$repo_root/cairn/.venv/bin/cairn serve --host 0.0.0.0 --port 8000" "server"
 
-  server_pid="$(
-    cd "$repo_root" &&
-      start_background_process \
-        "$server_pidfile" \
-        "$server_log" \
-        "$repo_root/cairn/.venv/bin/cairn" \
-        serve \
-        --host 0.0.0.0 \
-        --port 8000 \
-        --db-path "$db_path"
-  )"
+  cd "$repo_root"
+  start_detached_process \
+    "$server_log" \
+    "$repo_root/cairn/.venv/bin/cairn" \
+    serve \
+    --host 0.0.0.0 \
+    --port 8000 \
+    --db-path "$db_path"
+  if ! wait_for_process_match "$repo_root/cairn/.venv/bin/cairn serve --host 0.0.0.0 --port 8000" 15; then
+    echo "Server process did not appear" >&2
+    tail -n 40 "$server_log" >&2 || true
+    exit 1
+  fi
+  echo "$started_pid" >"$server_pidfile"
+  server_pid="$started_pid"
   if ! wait_for_port 8000 15; then
     echo "Server failed to bind 0.0.0.0:8000" >&2
     tail -n 40 "$server_log" >&2 || true
@@ -187,14 +208,18 @@ start_dispatcher_cmd() {
   fi
   stop_repo_processes "$repo_root/cairn/.venv/bin/cairn dispatch" "dispatcher"
 
-  dispatcher_pid="$(
-    cd "$repo_root" &&
-      start_background_process \
-        "$dispatcher_pidfile" \
-        "$dispatcher_log" \
-        "$repo_root/cairn/.venv/bin/cairn" \
-        dispatch
-  )"
+  cd "$repo_root"
+  start_detached_process \
+    "$dispatcher_log" \
+    "$repo_root/cairn/.venv/bin/cairn" \
+    dispatch
+  if ! wait_for_process_match "$repo_root/cairn/.venv/bin/cairn dispatch" 15; then
+    echo "Dispatcher process did not appear" >&2
+    tail -n 40 "$dispatcher_log" >&2 || true
+    exit 1
+  fi
+  echo "$started_pid" >"$dispatcher_pidfile"
+  dispatcher_pid="$started_pid"
   sleep 1
   if ! ps -p "$dispatcher_pid" >/dev/null 2>&1; then
     echo "Dispatcher failed to stay running" >&2
