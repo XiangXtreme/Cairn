@@ -11,7 +11,7 @@ usage() {
   cat <<'EOF'
 Usage: scripts/start-cairn-local.sh [options]
 
-Start the local Cairn server and/or dispatcher with repository-scoped data paths.
+Start the fallback local Cairn runtime with repository-scoped data paths.
 
 Options:
   --mode file|ui        Dispatcher config source, default ui
@@ -206,7 +206,7 @@ start_dispatcher_cmd() {
   echo "  log:  $dispatcher_log"
 }
 
-echo "Starting local Cairn"
+echo "Starting local Cairn fallback runtime"
 echo "  repo:    $repo_root"
 echo "  mode:    $mode"
 echo "  runtime: $runtime_dir"

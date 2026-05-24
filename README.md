@@ -126,16 +126,47 @@ Supported worker backends: **Claude Code**, **Codex**, and **Pi**.
 ## Getting Started
 
 **Prerequisites**
- 
-- Windows, macOS, or Linux
-- Python ≥ 3.12
-- Local worker CLIs on `PATH`, such as `claude`, `codex`, `pi`, `curl`, and `python`
-- Docker, only when using the Docker worker runtime
- 
+
+- Linux for the Docker runtime
+- Docker / Docker Compose
+- Python >= 3.12 only when you develop Cairn itself or use the local fallback runtime
+- Local worker CLIs on `PATH`, such as `claude`, `codex`, or `pi`, only when you explicitly use the local fallback runtime
+
+### Docker Runtime
+
+The Docker runtime is the primary way to run Cairn. It keeps the server, dispatcher, worker toolchain, and observer stack on one managed path, so you do not need host-installed worker CLIs for normal use.
+
+Edit `dispatch_docker.yaml` and fill in your LLM endpoints and API keys, then:
+
+```bash
+docker pull --platform=linux/amd64 ghcr.io/oritera/cairn-worker-container:latest
+./scripts/start-cairn-docker.sh
+```
+
+This starts `cairn-server` on port `8000` and `cairn-dispatcher` after the server health check passes. Dispatcher runtime files are persisted under `./datas/cairn-runtime/`.
+
+By default the script starts the full stack, including the observer UI on `http://127.0.0.1:8081`. When the local observer bundle is missing, it prepares the embedded frontend assets and local `agentsview` binary automatically before starting Docker.
+
+Useful variants:
+
+```bash
+./scripts/start-cairn-docker.sh --core-only
+./scripts/start-cairn-docker.sh --mode file
+./scripts/start-cairn-docker.sh --logs
+```
+
+When observer auth is enabled, fetch the current login token from the container logs:
+
+```bash
+docker compose logs cairn-observer | rg 'Auth enabled\. Token:'
+```
+
+Use this mode as the default product path. It keeps worker execution inside the managed container environment and avoids host-level CLI drift.
+
 ### Local Runtime
 
-The default runtime executes worker processes directly on the host. This is the recommended path on Windows and the simplest path for local development.
- 
+The local runtime remains available as a fallback for development, debugging, or cases where you specifically want direct access to host-installed `claude`, `codex`, or `pi` CLIs.
+
 Edit `dispatch.yaml` and fill in your LLM endpoints and API keys, then:
  
 ```bash
@@ -201,37 +232,6 @@ uv run --project cairn cairn dispatch --config dispatch_observer.yaml
 ```
 
 The observer keeps Cairn's core protocol unchanged: Facts, Intents, and Hints remain the coordination primitives; metadata is stored in side tables and exported into the YAML graph only when present.
-
-### Docker Runtime
-
-Linux deployments can run Cairn Server and Dispatcher with Docker Compose while the Dispatcher starts one worker container per Cairn project.
-
-Edit `dispatch_docker.yaml` and fill in your LLM endpoints and API keys, then:
-
-```bash
-docker pull --platform=linux/amd64 ghcr.io/oritera/cairn-worker-container:latest
-./scripts/start-cairn-docker.sh
-```
-
-This starts `cairn-server` on port `8000` and `cairn-dispatcher` after the server health check passes. Dispatcher runtime files are persisted under `./datas/cairn-runtime/`.
-
-By default the script starts the full stack, including the observer UI on `http://127.0.0.1:8081`. When the local observer bundle is missing, it prepares the embedded frontend assets and local `agentsview` binary automatically before starting Docker.
-
-Useful variants:
-
-```bash
-./scripts/start-cairn-docker.sh --core-only
-./scripts/start-cairn-docker.sh --mode file
-./scripts/start-cairn-docker.sh --logs
-```
-
-When observer auth is enabled, fetch the current login token from the container logs:
-
-```bash
-docker compose logs cairn-observer | rg 'Auth enabled\. Token:'
-```
-
-Use this mode when you want Linux worker isolation. Use the local runtime when you want direct access to host-installed `claude`, `codex`, or `pi` CLIs.
 
 ### Unified Rebuild Script
 

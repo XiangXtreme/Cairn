@@ -10,7 +10,7 @@ usage() {
   cat <<'EOF'
 Usage: scripts/start-cairn-docker.sh [options]
 
-Start the full Cairn Docker environment for the current checkout.
+Start the primary Cairn runtime for the current checkout.
 
 Options:
   --mode file|ui      Dispatcher config source, default ui
@@ -93,7 +93,7 @@ if [[ "$build" == "1" ]]; then
 fi
 compose+=("${services[@]}")
 
-echo "Starting Cairn Docker environment"
+echo "Starting Cairn Docker runtime"
 echo "  mode:     $mode"
 echo "  services: ${services[*]}"
 echo "  data:     $repo_root/datas"
@@ -112,6 +112,7 @@ Config mode:
 Useful commands:
   docker compose ps
   docker compose logs -f cairn-dispatcher
+  ./scripts/dev-rebuild.sh check
 EOF
 
 if [[ "$profile" == "all" ]]; then
