@@ -274,6 +274,44 @@ def test_ui_dispatch_settings_preserves_auth_token_when_secret_field_is_blank(tm
     assert "CODEX_MODEL: gpt-5.5" in compiled
 
 
+def test_ui_dispatch_settings_preserves_existing_worker_model_when_provider_edit_omits_model(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db_path = tmp_path / "cairn.db"
+    db._db_path = None
+    db.configure(db_path)
+
+    dispatch_path = tmp_path / "dispatch.yaml"
+    _write_dispatch(dispatch_path)
+
+    monkeypatch.setenv("CAIRN_DISPATCH_CONFIG", str(dispatch_path))
+    monkeypatch.setenv("CAIRN_UI_DISPATCH_CONFIG", str(tmp_path / "datas" / "cairn" / "dispatch_ui.yaml"))
+    monkeypatch.setenv("CAIRN_DISPATCH_SETTINGS_MODE", "ui")
+
+    client = TestClient(app)
+    initial = client.get("/settings/dispatch?mode=ui")
+    assert initial.status_code == 200
+    payload = initial.json()
+
+    first_save = client.put("/settings/dispatch", json=payload)
+    assert first_save.status_code == 200, first_save.text
+
+    second_payload = first_save.json()
+    second_payload["providers"][0]["base_url"] = "https://codex.example.test/v1"
+    second_payload["workers"][0]["provider_id"] = second_payload["providers"][0]["id"]
+    second_payload["workers"][0]["model"] = ""
+    second_payload["workers"][0]["base_url"] = ""
+    second_payload["workers"][0]["auth_token"] = ""
+
+    second_save = client.put("/settings/dispatch", json=second_payload)
+    assert second_save.status_code == 200, second_save.text
+
+    compiled = (tmp_path / "datas" / "cairn" / "dispatch_ui.yaml").read_text(encoding="utf-8")
+    assert "CODEX_MODEL: gpt-5.4" in compiled
+    assert "CODEX_BASE_URL: https://codex.example.test/v1" in compiled
+
+
 def test_ui_dispatch_settings_restores_missing_providers_from_compiled_workers(tmp_path: Path, monkeypatch) -> None:
     db_path = tmp_path / "cairn.db"
     db._db_path = None

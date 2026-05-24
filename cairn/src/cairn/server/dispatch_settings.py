@@ -967,27 +967,45 @@ def _merge_workers(
         _clear_known_worker_env(env)
         field_map = _WORKER_ENV_FIELD_MAP[worker.type]
         provider = provider_by_id.get(worker.provider_id) if worker.provider_id else None
-        model_value = worker.model
-        base_url_value = provider.base_url if provider else worker.base_url
-        auth_token_value = provider.auth_token if provider and provider.auth_token else worker.auth_token
-        provider_api_value = worker.provider_api
+        model_key = field_map.get("model")
+        base_url_key = field_map.get("base_url")
+        auth_token_key = field_map.get("auth_token")
+        provider_api_key = field_map.get("provider_api")
+        context_window_key = field_map.get("context_window")
+
+        model_value = worker.model or str(existing_env.get(model_key or "", "")).strip()
+        base_url_value = (
+            provider.base_url
+            if provider and provider.base_url
+            else worker.base_url or str(existing_env.get(base_url_key or "", "")).strip()
+        )
+        auth_token_value = (
+            provider.auth_token
+            if provider and provider.auth_token
+            else worker.auth_token or str(existing_env.get(auth_token_key or "", "")).strip()
+        )
+        provider_api_value = worker.provider_api or str(existing_env.get(provider_api_key or "", "")).strip()
         context_window_value = worker.context_window
+        if context_window_value is None and context_window_key:
+            raw_context_window = str(existing_env.get(context_window_key, "")).strip()
+            if raw_context_window.isdigit():
+                context_window_value = int(raw_context_window)
         extra_env_value = {}
         if provider:
             extra_env_value.update(provider.extra_env)
         extra_env_value.update(worker.extra_env)
 
-        _set_env_value(env, field_map.get("model"), model_value)
-        _set_env_value(env, field_map.get("base_url"), base_url_value)
+        _set_env_value(env, model_key, model_value)
+        _set_env_value(env, base_url_key, base_url_value)
         _merge_auth_token(
             env,
-            field_map.get("auth_token"),
+            auth_token_key,
             auth_token_value,
             preserve_existing=worker.has_auth_token,
             existing_env=existing_env,
         )
-        _set_env_value(env, field_map.get("provider_api"), provider_api_value)
-        _set_context_window(env, field_map.get("context_window"), context_window_value)
+        _set_env_value(env, provider_api_key, provider_api_value)
+        _set_context_window(env, context_window_key, context_window_value)
         env.update(
             {
                 key: value
