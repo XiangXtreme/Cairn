@@ -4,7 +4,7 @@ import { Activity, CheckCircle2, Clock3, Eye, Pause, Play, Trash2 } from 'lucide
 import AppButton from '@/components/ui/AppButton.vue';
 import BadgePill from '@/components/ui/BadgePill.vue';
 import type { ProjectSummary } from '@/types/workspace';
-import { projectStatusTone } from '@/utils/workspace';
+import { projectStatusLabel, projectStatusTone } from '@/utils/workspace';
 
 const props = defineProps<{
   project: ProjectSummary;
@@ -34,7 +34,7 @@ function nextStatus() {
           <div class="min-w-0">
             <div class="flex items-center gap-2">
               <h3 class="truncate text-base font-semibold text-slate-900">{{ project.title }}</h3>
-              <BadgePill :tone="projectStatusTone(project.status)">{{ project.status }}</BadgePill>
+              <BadgePill :tone="projectStatusTone(project.status)">{{ projectStatusLabel(project.status) }}</BadgePill>
             </div>
             <div class="mt-1 text-xs font-mono text-slate-400">{{ project.id }}</div>
           </div>

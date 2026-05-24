@@ -20,16 +20,16 @@ const emit = defineEmits<{
   <section class="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
     <div class="mb-4 flex items-center justify-between gap-3">
       <div>
-        <div class="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Projects</div>
-        <h2 class="mt-1 text-lg font-semibold text-slate-900">Project Overview</h2>
+        <div class="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">项目</div>
+        <h2 class="mt-1 text-lg font-semibold text-slate-900">项目概览</h2>
       </div>
-      <div class="text-xs text-slate-400">Open a project card to view details</div>
+      <div class="text-xs text-slate-400">打开项目卡片查看详情</div>
     </div>
 
     <EmptyState
       v-if="projects.length === 0"
-      title="No projects yet"
-      detail="Create a project to populate the list, detail view, graph, and timeline."
+      title="还没有项目"
+      detail="创建项目后，这里会显示列表、详情、图谱与时间线。"
     />
 
     <div v-else class="space-y-4">

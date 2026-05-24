@@ -4,7 +4,7 @@ import { ArrowLeft, CheckCheck, CirclePlay, Copy, FileCode2, Lightbulb, PauseCir
 import AppButton from '@/components/ui/AppButton.vue';
 import BadgePill from '@/components/ui/BadgePill.vue';
 import type { ProjectDetail } from '@/types/workspace';
-import { projectStatusTone } from '@/utils/workspace';
+import { projectStatusLabel, projectStatusTone } from '@/utils/workspace';
 
 defineProps<{
   project: ProjectDetail;
@@ -32,7 +32,7 @@ const emit = defineEmits<{
       <div class="min-w-0">
         <div class="flex items-center gap-2">
           <h2 class="truncate text-xl font-semibold text-slate-950">{{ project.project.title }}</h2>
-          <BadgePill :tone="projectStatusTone(project.project.status)">{{ project.project.status }}</BadgePill>
+          <BadgePill :tone="projectStatusTone(project.project.status)">{{ projectStatusLabel(project.project.status) }}</BadgePill>
         </div>
         <div class="mt-1 text-xs font-mono text-slate-400">{{ project.project.id }}</div>
         </div>

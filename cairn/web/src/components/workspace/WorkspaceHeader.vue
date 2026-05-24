@@ -22,23 +22,23 @@ const emit = defineEmits<{
         <div class="min-w-0">
           <div class="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
             <Waves class="h-3.5 w-3.5" />
-            <span>Cairn Workspace</span>
+            <span>Cairn 工作台</span>
           </div>
           <div class="mt-2 flex flex-wrap items-center gap-3">
             <h1 class="text-2xl font-semibold tracking-tight text-slate-950">
-              {{ selectedProjectTitle || 'Project Workspace' }}
+              {{ selectedProjectTitle || '项目工作台' }}
             </h1>
             <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-500">
               <FolderKanban class="h-3.5 w-3.5" />
-              {{ projectCount }} Projects
+              {{ projectCount }} 个项目
             </span>
           </div>
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
-          <AppButton :icon="Plus" variant="brand" @click="emit('create')">New Project</AppButton>
-          <AppButton :icon="PauseCircle" @click="emit('pauseAll')">Pause Active Projects</AppButton>
-          <AppButton :icon="Settings" @click="emit('settings')">Settings</AppButton>
+          <AppButton :icon="Plus" variant="brand" @click="emit('create')">新建项目</AppButton>
+          <AppButton :icon="PauseCircle" @click="emit('pauseAll')">暂停活跃项目</AppButton>
+          <AppButton :icon="Settings" @click="emit('settings')">设置</AppButton>
         </div>
       </div>
     </div>

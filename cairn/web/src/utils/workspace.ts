@@ -54,6 +54,12 @@ export function projectStatusTone(status: ProjectStatus) {
   return 'slate';
 }
 
+export function projectStatusLabel(status: ProjectStatus) {
+  if (status === 'active') return '活跃';
+  if (status === 'stopped') return '暂停';
+  return '完成';
+}
+
 export function layoutEngine(mode: LayoutMode) {
   if (mode.startsWith('elk')) return 'elk';
   if (mode.startsWith('klay')) return 'klay';
