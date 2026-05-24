@@ -70,7 +70,6 @@ cleanup_prefixed_files() {
 sync_codex() {
   [[ -n "$codex_sessions_dir" ]] || return 0
   cleanup_broken_links "$codex_sessions_dir"
-  cleanup_prefixed_files "$codex_sessions_dir" "shared-"
 
   while IFS= read -r rollout_path; do
     [[ -n "$rollout_path" ]] || continue
@@ -80,7 +79,7 @@ sync_codex() {
   if [[ -n "$shared_sessions_root" && -d "$shared_sessions_root/.codex/sessions" ]]; then
     while IFS= read -r rollout_path; do
       [[ -n "$rollout_path" ]] || continue
-      link_file "$rollout_path" "$codex_sessions_dir" "shared-"
+      link_file "$rollout_path" "$codex_sessions_dir" ""
     done < <(find "$shared_sessions_root/.codex/sessions" -type f -name 'rollout-*.jsonl' 2>/dev/null | sort)
   fi
 }
@@ -101,7 +100,6 @@ sync_claude() {
       [[ -n "$session_path" ]] || continue
       local project_name
       project_name="$(basename "$(dirname "$session_path")")"
-      cleanup_prefixed_files "$claude_projects_dir/$project_name" "shared-"
       link_file "$session_path" "$claude_projects_dir/$project_name" "shared-"
     done < <(find "$shared_sessions_root/.claude/projects" -type f -name '*.jsonl' 2>/dev/null | sort)
   fi

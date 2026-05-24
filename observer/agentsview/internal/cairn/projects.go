@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -38,12 +37,7 @@ func ProjectSummaries(ctx context.Context, dbPath string) (map[string]ProjectSum
 		}
 		return nil, fmt.Errorf("stat Cairn db: %w", err)
 	}
-	u := url.URL{Scheme: "file", Path: dbPath}
-	q := u.Query()
-	q.Set("mode", "ro")
-	q.Set("immutable", "1")
-	u.RawQuery = q.Encode()
-	db, err := sql.Open("sqlite3", u.String())
+	db, err := sql.Open("sqlite3", "file:"+dbPath+"?mode=ro")
 	if err != nil {
 		return nil, fmt.Errorf("open Cairn db: %w", err)
 	}

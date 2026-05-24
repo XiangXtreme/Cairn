@@ -16,6 +16,8 @@ from cairn.dispatcher.config import ContainerConfig, ExecutionConfig
 from cairn.dispatcher.runtime.docker_process import DockerManagedProcess
 
 LOG = logging.getLogger(__name__)
+_CONTAINER_USER_ID = 1000
+_CONTAINER_GROUP_ID = 1000
 
 
 class DockerRuntimeManager:
@@ -118,7 +120,13 @@ class DockerRuntimeManager:
             ) from exc
         exit_code = result.exit_code if hasattr(result, "exit_code") else None
         if exit_code not in (None, 0):
-            raise RuntimeError(f"failed to link {link_path} to {target} in container {container.name}: exit {exit_code}")
+            output = getattr(result, "output", b"")
+            if isinstance(output, bytes):
+                output = output.decode("utf-8", errors="replace")
+            detail = f": {str(output).strip()}" if str(output).strip() else ""
+            raise RuntimeError(
+                f"failed to link {link_path} to {target} in container {container.name}: exit {exit_code}{detail}"
+            )
         return str(link_path)
 
     def write_observer_text_file(self, relative_path: str, content: str) -> str:
@@ -196,13 +204,30 @@ class DockerRuntimeManager:
 
     def _ensure_running_locked(self, project_id: str, name: str) -> str:
         state = self.inspect_state(name)
-        if state == "running":
-            LOG.debug("container already running project=%s container=%s", project_id, name)
-            return name
         if state is not None:
-            LOG.info("starting existing container project=%s container=%s state=%s", project_id, name, state)
-            self._start_existing(name)
-            return name
+            container = self._require_container(name)
+            if not self._has_session_mount(container):
+                LOG.warning(
+                    "recreating project container without session mount project=%s container=%s state=%s session_home=%s",
+                    project_id,
+                    name,
+                    state,
+                    self._session_home,
+                )
+                try:
+                    container.remove(force=True)
+                except NotFound:
+                    pass
+                except DockerException as exc:
+                    raise RuntimeError(f"failed to remove container {name} for session mount refresh: {exc}") from exc
+                state = None
+            elif state == "running":
+                LOG.debug("container already running project=%s container=%s", project_id, name)
+                return name
+            else:
+                LOG.info("starting existing container project=%s container=%s state=%s", project_id, name, state)
+                self._start_existing(name)
+                return name
         LOG.info("creating container project=%s container=%s image=%s", project_id, name, self._config.image)
         try:
             self._client.containers.run(
@@ -290,7 +315,6 @@ class DockerRuntimeManager:
         return self.inspect_state(name) != "running"
 
     def _put_text_file(self, container: Container, path: PurePosixPath, content: str) -> None:
-        self._ensure_container_dir(container, path.parent)
         archive_path, archive = _text_file_archive(path, content)
         try:
             ok = container.put_archive(archive_path, archive)
@@ -309,7 +333,6 @@ class DockerRuntimeManager:
             raise RuntimeError(f"failed to create directory {path} in container {container.name}: exit {exit_code}")
 
     def _put_directory(self, container: Container, path: PurePosixPath, source: Path) -> None:
-        self._ensure_container_dir(container, path.parent)
         archive_path, archive = _directory_archive(path, source)
         try:
             ok = container.put_archive(archive_path, archive)
@@ -317,6 +340,15 @@ class DockerRuntimeManager:
             raise RuntimeError(f"failed to copy directory {source} to {path} in container {container.name}: {exc}") from exc
         if not ok:
             raise RuntimeError(f"failed to copy directory {source} to {path} in container {container.name}")
+
+    def _has_session_mount(self, container: Container) -> bool:
+        try:
+            container.reload()
+        except DockerException as exc:
+            raise RuntimeError(f"failed to inspect container {container.name}: {exc}") from exc
+        expected = str(self._session_home)
+        mounts = container.attrs.get("Mounts", [])
+        return any(str(mount.get("Destination", "")) == expected for mount in mounts)
 
     @staticmethod
     def _is_name_conflict(exc: APIError) -> bool:
@@ -326,40 +358,70 @@ class DockerRuntimeManager:
 
 def _text_file_archive(path: PurePosixPath, content: str) -> tuple[str, bytes]:
     normalized = PurePosixPath("/") / path.relative_to("/") if path.is_absolute() else PurePosixPath("/") / path
-    parent = normalized.parent
-    filename = normalized.name
     data = content.encode("utf-8")
     buffer = io.BytesIO()
     with tarfile.open(fileobj=buffer, mode="w") as tar:
-        info = tarfile.TarInfo(filename)
+        _add_parent_dirs(tar, normalized.parent)
+        info = tarfile.TarInfo(_archive_name(normalized))
         info.size = len(data)
         info.mode = 0o644
+        _set_container_owner(info)
         tar.addfile(info, io.BytesIO(data))
-    return str(parent), buffer.getvalue()
+    return "/", buffer.getvalue()
 
 
 def _directory_archive(path: PurePosixPath, source: Path) -> tuple[str, bytes]:
     normalized = PurePosixPath("/") / path.relative_to("/") if path.is_absolute() else PurePosixPath("/") / path
-    parent = normalized.parent
-    dirname = normalized.name
     buffer = io.BytesIO()
     with tarfile.open(fileobj=buffer, mode="w") as tar:
+        _add_parent_dirs(tar, normalized.parent)
+        root_name = _archive_name(normalized)
+        root_info = tarfile.TarInfo(root_name)
+        root_info.type = tarfile.DIRTYPE
+        root_info.mode = 0o755
+        _set_container_owner(root_info)
+        tar.addfile(root_info)
         for item in sorted(source.rglob("*")):
             rel = item.relative_to(source)
-            arcname = PurePosixPath(dirname) / PurePosixPath(rel.as_posix())
+            arcname = PurePosixPath(root_name) / PurePosixPath(rel.as_posix())
             info_name = str(arcname)
             if item.is_dir():
                 info = tarfile.TarInfo(info_name)
                 info.type = tarfile.DIRTYPE
                 info.mode = 0o755
+                _set_container_owner(info)
                 tar.addfile(info)
                 continue
             data = item.read_bytes()
             info = tarfile.TarInfo(info_name)
             info.size = len(data)
             info.mode = 0o644
+            _set_container_owner(info)
             tar.addfile(info, io.BytesIO(data))
-    return str(parent), buffer.getvalue()
+    return "/", buffer.getvalue()
+
+
+def _archive_name(path: PurePosixPath) -> str:
+    return str(path).lstrip("/") or "."
+
+
+def _add_parent_dirs(tar: tarfile.TarFile, path: PurePosixPath) -> None:
+    parts = path.parts[1:] if path.is_absolute() else path.parts
+    current = PurePosixPath()
+    for part in parts:
+        current /= part
+        info = tarfile.TarInfo(str(current))
+        info.type = tarfile.DIRTYPE
+        info.mode = 0o755
+        _set_container_owner(info)
+        tar.addfile(info)
+
+
+def _set_container_owner(info: tarfile.TarInfo) -> None:
+    info.uid = _CONTAINER_USER_ID
+    info.gid = _CONTAINER_GROUP_ID
+    info.uname = "kali"
+    info.gname = "kali"
 
 
 def _sh_quote(value: str) -> str:

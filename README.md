@@ -147,6 +147,13 @@ This starts `cairn-server` on port `8000` and `cairn-dispatcher` after the serve
 
 By default the script starts the full stack, including AgentView on `http://127.0.0.1:8081`. In the Docker path, AgentView is a managed Cairn subsystem rather than a separate service you need to run by hand. It reads the shared runtime under `datas/cairn-runtime/`. When the local observer bundle is missing, the script prepares the embedded frontend assets and local `agentsview` binary before starting Docker.
 
+Docker runtime notes:
+
+- AgentView observes one runtime root: `datas/cairn-runtime`. Do not point the Docker stack at `.cairn-runtime`, `cairn/.cairn-runtime`, or a separate observer-only directory.
+- Worker CLI sessions are shared through the Docker volume mounted at `/cairn-observer-sessions`; the observer reads synchronized links from `/runtime/observer/codex-sessions`.
+- Codex session links must keep their original `rollout-*.jsonl` filenames. Adding prefixes such as `shared-` makes AgentView's session discovery skip them.
+- Cairn's SQLite database uses WAL mode. The observer container mounts `datas/cairn` writable so SQLite can see the WAL files, but the AgentView code opens the database read-only internally.
+
 Useful variants:
 
 ```bash
@@ -251,6 +258,16 @@ What each command does:
 - `all`: runs both of the above
 - `check`: prints container status and probes `http://127.0.0.1:8000` and `http://127.0.0.1:8081`
 
+If you change Go code or frontend assets under `observer/agentsview`, rebuild the observer bundle before restarting the container:
+
+```bash
+./scripts/prepare-cairn-observer.sh --force
+# or
+./scripts/dev-rebuild.sh observer
+```
+
+Restarting `cairn-observer` alone does not update a stale `observer/agentsview/agentsview` binary.
+
 ### Cairn AgentView
 
 Cairn includes AgentView under `observer/agentsview`. It is a Cairn-scoped fork of agentsview: it reads only Cairn-generated worker session mappings from `datas/cairn-runtime/observer/runs`, groups sessions by Cairn project, and renders the original Claude Code / Codex style session view.
@@ -270,6 +287,23 @@ On Linux or macOS:
 ```
 
 The script starts the UI at `http://127.0.0.1:8081/`, binds to `0.0.0.0` by default so AgentView is reachable from the local network, stores its SQLite data under `datas/cairn-runtime/agentsview-data`, and sets `CAIRN_ONLY=1` so non-Cairn local agent sessions are hidden. It uses the built `observer/agentsview/agentsview` binary, reads one explicit runtime root, and refuses silent port drift away from `8081`.
+
+Troubleshooting:
+
+- If the left session list is empty but Usage shows activity, first check that session links exist in the observer container:
+
+  ```bash
+  docker exec cairn-observer find /runtime/observer/codex-sessions -maxdepth 1 -type l | head
+  ```
+
+- Then query AgentView with the current bearer token from the container logs:
+
+  ```bash
+  curl -H 'Authorization: Bearer <token>' \
+    'http://127.0.0.1:8081/api/v1/sessions?include_one_shot=true&include_children=true&limit=500'
+  ```
+
+- If the API returns zero sessions, verify that the sync loop is preserving `rollout-*.jsonl` names and that both dispatcher workers and observer are using `datas/cairn-runtime`.
 
 By default the script uses `datas/cairn-runtime`. To point it at a different runtime directory explicitly:
 

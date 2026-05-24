@@ -47,7 +47,7 @@ func (s *Server) cairnSessions(ctx context.Context) (map[string]cairnSessionMeta
 	for _, run := range runs {
 		summary, ok := summaries[run.ProjectID]
 		if !ok {
-			continue
+			summary = cairn.ProjectSummary{Title: run.ProjectID}
 		}
 		if run.SessionID != nil && *run.SessionID != "" {
 			meta := cairnSessionMeta{
@@ -173,14 +173,44 @@ func shortenTitle(title string) string {
 }
 
 func cairnSessionIDVariants(agentType string, sessionID string) []string {
-	switch agentType {
-	case "codex":
-		return []string{"codex:" + sessionID}
-	case "pi":
-		return []string{"pi:" + sessionID}
-	default:
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
 		return nil
 	}
+	var variants []string
+	if prefix, raw, ok := strings.Cut(sessionID, ":"); ok {
+		variants = append(variants, raw)
+		switch strings.ToLower(strings.TrimSpace(prefix)) {
+		case "codex", "claude", "pi":
+			variants = append(variants, prefix+":"+raw)
+		}
+	}
+	switch strings.ToLower(strings.TrimSpace(agentType)) {
+	case "codex":
+		variants = append(variants, "codex:"+strings.TrimPrefix(sessionID, "codex:"))
+	case "claudecode", "claude":
+		variants = append(variants, "claude:"+strings.TrimPrefix(sessionID, "claude:"))
+	case "pi":
+		variants = append(variants, "pi:"+strings.TrimPrefix(sessionID, "pi:"))
+	}
+	return uniqueStrings(variants)
+}
+
+func uniqueStrings(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	unique := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		unique = append(unique, value)
+	}
+	return unique
 }
 
 func cairnProjectName(projectID string) string {
@@ -234,6 +264,7 @@ func (s *Server) filterCairnSessionPage(
 		return page, err
 	}
 	filtered := page.Sessions[:0]
+	seen := make(map[string]struct{}, len(page.Sessions))
 	for _, sess := range page.Sessions {
 		if meta, ok := sessions[sess.ID]; ok {
 			if projectFilter != "" && meta.Project != projectFilter {
@@ -241,6 +272,27 @@ func (s *Server) filterCairnSessionPage(
 			}
 			applyCairnSessionMeta(&sess, meta)
 			filtered = append(filtered, sess)
+			seen[sess.ID] = struct{}{}
+		}
+	}
+	if len(filtered) == 0 || len(filtered) < len(sessions) {
+		for id, meta := range sessions {
+			if _, exists := seen[id]; exists {
+				continue
+			}
+			if projectFilter != "" && meta.Project != projectFilter {
+				continue
+			}
+			sess, err := s.db.GetSession(ctx, id)
+			if err != nil {
+				return page, err
+			}
+			if sess == nil {
+				continue
+			}
+			applyCairnSessionMeta(sess, meta)
+			filtered = append(filtered, *sess)
+			seen[id] = struct{}{}
 		}
 	}
 	page.Sessions = filtered

@@ -60,7 +60,7 @@ services:
       - ./observer/agentsview:/src
       - ./scripts:/src/scripts:ro
       - ./datas/cairn-runtime:/runtime
-      - ./datas/cairn:/cairn-data:ro
+      - ./datas/cairn:/cairn-data
       - ./datas/cairn-observer-shared:/observer-shared
       - cairn-worker-sessions:/cairn-observer-sessions
     working_dir: /src
@@ -73,7 +73,7 @@ services:
       CLAUDE_PROJECTS_DIR: /runtime/observer/claude-projects
       CODEX_SESSIONS_DIR: /runtime/observer/codex-sessions
       PI_DIR: /runtime/observer/pi-sessions
-      CAIRN_SHARED_SESSIONS_ROOT: /observer-shared
+      CAIRN_SHARED_SESSIONS_ROOT: /cairn-observer-sessions
     depends_on:
       cairn-server:
         condition: service_healthy
