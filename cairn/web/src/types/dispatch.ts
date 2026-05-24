@@ -133,6 +133,10 @@ export interface DispatchModeInfo {
   hot_reload_enabled: boolean;
   compiled_updated_at?: string | null;
   last_validation_error: string;
+  observer_enabled: boolean;
+  observer_online: boolean;
+  observer_url: string;
+  observer_runtime_root: string;
 }
 
 export interface DispatchSettings {

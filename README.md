@@ -145,7 +145,7 @@ docker pull --platform=linux/amd64 ghcr.io/oritera/cairn-worker-container:latest
 
 This starts `cairn-server` on port `8000` and `cairn-dispatcher` after the server health check passes. Dispatcher runtime files are persisted under `./datas/cairn-runtime/`.
 
-By default the script starts the full stack, including the observer UI on `http://127.0.0.1:8081`. When the local observer bundle is missing, it prepares the embedded frontend assets and local `agentsview` binary automatically before starting Docker.
+By default the script starts the full stack, including AgentView on `http://127.0.0.1:8081`. In the Docker path, AgentView is a managed Cairn subsystem rather than a separate service you need to run by hand. It reads the shared runtime under `datas/cairn-runtime/`. When the local observer bundle is missing, the script prepares the embedded frontend assets and local `agentsview` binary before starting Docker.
 
 Useful variants:
 
@@ -251,9 +251,11 @@ What each command does:
 - `all`: runs both of the above
 - `check`: prints container status and probes `http://127.0.0.1:8000` and `http://127.0.0.1:8081`
 
-### Cairn Observer UI
+### Cairn AgentView
 
-Cairn includes a local observer UI under `observer/agentsview`. It is a Cairn-scoped fork of agentsview: it reads only Cairn-generated worker session mappings from `datas/cairn-runtime/observer/runs`, groups sessions by Cairn project, and renders the original Claude Code / Codex style session view.
+Cairn includes AgentView under `observer/agentsview`. It is a Cairn-scoped fork of agentsview: it reads only Cairn-generated worker session mappings from `datas/cairn-runtime/observer/runs`, groups sessions by Cairn project, and renders the original Claude Code / Codex style session view.
+
+For normal use, prefer the Docker runtime above. In that path AgentView is managed as part of the Cairn stack. The local script below is a fallback for development and debugging only.
 
 On Windows:
 
@@ -267,9 +269,9 @@ On Linux or macOS:
 ./scripts/start-cairn-observer.sh
 ```
 
-The script starts the UI at `http://127.0.0.1:8081/` and binds to `0.0.0.0` by default so the observer is reachable from the local network, stores its SQLite data under `datas/cairn-runtime/agentsview-data`, and sets `CAIRN_ONLY=1` so non-Cairn local agent sessions are hidden. If the embedded frontend assets are missing after a fresh clone, the script builds them automatically from `observer/agentsview/frontend`.
+The script starts the UI at `http://127.0.0.1:8081/`, binds to `0.0.0.0` by default so AgentView is reachable from the local network, stores its SQLite data under `datas/cairn-runtime/agentsview-data`, and sets `CAIRN_ONLY=1` so non-Cairn local agent sessions are hidden. It uses the built `observer/agentsview/agentsview` binary, reads one explicit runtime root, and refuses silent port drift away from `8081`.
 
-By default the script uses `datas/cairn-runtime` when that dispatcher runtime exists, then falls back to older runtime locations for compatibility. To point it at a different runtime directory:
+By default the script uses `datas/cairn-runtime`. To point it at a different runtime directory explicitly:
 
 ```powershell
 .\scripts\start-cairn-observer.ps1 -RuntimeDir datas/cairn-runtime

@@ -35,6 +35,9 @@ func prepareServeRuntimeConfig(
 
 	port := server.FindAvailablePort(cfg.Host, cfg.Port)
 	if port != cfg.Port {
+		if requestedPort != 0 {
+			return cfg, fmt.Errorf("port %d is already in use", cfg.Port)
+		}
 		if cfg.Port == 0 {
 			fmt.Printf("Using available port %d\n", port)
 		} else {

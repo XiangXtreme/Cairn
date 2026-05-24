@@ -54,6 +54,8 @@ repo_root="$(cd -- "$script_dir/.." && pwd)"
 server_pidfile="$repo_root/datas/cairn/server.pid"
 dispatcher_pidfile="$repo_root/datas/cairn/dispatcher.pid"
 observer_pidfile="$repo_root/datas/cairn/observer.pid"
+observer_sync_pidfile="$repo_root/datas/cairn/observer-codex-sync.pid"
+observer_sync_script="$repo_root/scripts/sync-cairn-codex-sessions.sh"
 
 stop_pid_if_running() {
   local pid="$1"
@@ -90,6 +92,21 @@ stop_repo_processes() {
     [[ -n "$pid" ]] || continue
     if stop_pid_if_running "$pid"; then
       echo "$label: stopped stale pid=$pid"
+    fi
+  done <<<"$pids"
+}
+
+clear_listener_port() {
+  local clear_port="$1"
+  local pids
+  pids="$(lsof -tiTCP:"$clear_port" -sTCP:LISTEN 2>/dev/null || true)"
+  if [[ -z "$pids" ]]; then
+    return
+  fi
+  while read -r pid; do
+    [[ -n "$pid" ]] || continue
+    if stop_pid_if_running "$pid"; then
+      echo "listener:$clear_port stopped pid=$pid"
     fi
   done <<<"$pids"
 }
@@ -133,4 +150,9 @@ fi
 
 if [[ "$stop_observer" == "1" ]]; then
   stop_from_pidfile "observer" "$observer_pidfile"
+  stop_from_pidfile "observer-sync" "$observer_sync_pidfile"
+  stop_repo_processes "observer" "$repo_root/observer/agentsview/agentsview serve --host 0.0.0.0 --port 8081"
+  stop_repo_processes "observer-sync" "$observer_sync_script"
+  stop_repo_processes "observer" "go run -tags fts5 ./cmd/agentsview serve --host 0.0.0.0 --port 8081"
+  clear_listener_port "8081"
 fi

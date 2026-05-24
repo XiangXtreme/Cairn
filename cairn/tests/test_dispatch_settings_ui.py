@@ -76,6 +76,9 @@ def test_ui_dispatch_settings_bundle_and_compiled_yaml(tmp_path: Path, monkeypat
     assert data["providers"][0]["id"] == "codex_main_provider"
     assert data["mode_info"]["source_path"].endswith("dispatch_ui")
     assert data["mode_info"]["compiled_path"].endswith("dispatch_ui.yaml")
+    assert data["mode_info"]["observer_enabled"] is True
+    assert data["mode_info"]["observer_url"] == "http://127.0.0.1:8081"
+    assert data["mode_info"]["observer_runtime_root"].endswith("datas/cairn-runtime")
 
     update = {
         "mode": "ui",
@@ -226,6 +229,7 @@ def test_dispatch_settings_defaults_to_ui_mode_when_mode_is_unspecified(tmp_path
     assert data["path"].endswith("dispatch_ui.yaml")
     assert data["mode_info"]["source_path"].endswith("dispatch_ui")
     assert data["mode_info"]["compiled_path"].endswith("dispatch_ui.yaml")
+    assert data["mode_info"]["observer_enabled"] is True
 
 
 def test_ui_dispatch_settings_preserves_auth_token_when_secret_field_is_blank(tmp_path: Path, monkeypatch) -> None:

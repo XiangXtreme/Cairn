@@ -4,6 +4,7 @@ import json
 import os
 import re
 import shutil
+import socket
 import tempfile
 import base64
 import zipfile
@@ -100,6 +101,8 @@ _PROVIDER_SUPPORT_MATRIX: dict[WorkerType, bool] = {
     "pi": True,
     "mock": False,
 }
+_DEFAULT_OBSERVER_URL = "http://127.0.0.1:8081"
+_DEFAULT_OBSERVER_RUNTIME_ROOT = str(Path.cwd() / "datas" / "cairn-runtime")
 
 def resolve_dispatch_config_path() -> Path:
     env_value = os.getenv("CAIRN_DISPATCH_CONFIG", "").strip()
@@ -196,6 +199,45 @@ def resolve_runtime_profile(mode: DispatchSettingsMode, path: Path) -> str:
     return "file-custom"
 
 
+def _resolve_observer_runtime_root() -> str:
+    env_value = os.getenv("CAIRN_OBSERVER_RUNTIME_ROOT", "").strip()
+    if env_value:
+        return env_value
+    return _DEFAULT_OBSERVER_RUNTIME_ROOT
+
+
+def _resolve_observer_url() -> str:
+    env_value = os.getenv("CAIRN_OBSERVER_URL", "").strip()
+    if env_value:
+        return env_value
+    return _DEFAULT_OBSERVER_URL
+
+
+def _observer_online(url: str) -> bool:
+    match = re.match(r"^https?://([^/:]+)(?::(\d+))?", url)
+    if not match:
+        return False
+    host = match.group(1)
+    port = int(match.group(2) or 80)
+    try:
+        with socket.create_connection((host, port), timeout=0.5):
+            return True
+    except OSError:
+        return False
+
+
+def build_observer_mode_info() -> dict[str, str | bool]:
+    url = _resolve_observer_url()
+    runtime_root = _resolve_observer_runtime_root()
+    online = _observer_online(url)
+    return {
+        "observer_enabled": True,
+        "observer_online": online,
+        "observer_url": url,
+        "observer_runtime_root": runtime_root,
+    }
+
+
 def read_dispatch_settings(mode: DispatchSettingsMode | None = None) -> DispatchSettings:
     resolved_mode = resolve_dispatch_settings_mode(mode)
     if resolved_mode == "ui":
@@ -224,6 +266,7 @@ def read_dispatch_settings(mode: DispatchSettingsMode | None = None) -> Dispatch
             hot_reload_enabled=bool(ui_bundle["settings"].get("hot_reload", True)),
             compiled_updated_at=_isoformat(path),
             last_validation_error=_read_validation_error(),
+            **build_observer_mode_info(),
         )
         mcp_servers = ui_bundle["mcp_servers"]
         skills = ui_bundle["skills"]
@@ -238,6 +281,7 @@ def read_dispatch_settings(mode: DispatchSettingsMode | None = None) -> Dispatch
             hot_reload_enabled=True,
             compiled_updated_at=_isoformat(path),
             last_validation_error="",
+            **build_observer_mode_info(),
         )
         providers = _providers_from_file_workers(workers_raw)
         mcp_servers = []

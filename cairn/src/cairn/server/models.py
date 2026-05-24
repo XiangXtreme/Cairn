@@ -122,6 +122,10 @@ class DispatchModeInfo(BaseModel):
     hot_reload_enabled: bool = True
     compiled_updated_at: str | None = None
     last_validation_error: str = ""
+    observer_enabled: bool = False
+    observer_online: bool = False
+    observer_url: str = ""
+    observer_runtime_root: str = ""
 
 
 class ProviderSettings(BaseModel):

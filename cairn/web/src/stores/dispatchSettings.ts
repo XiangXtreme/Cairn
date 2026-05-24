@@ -162,6 +162,10 @@ function defaultModeInfo(): DispatchModeInfo {
     hot_reload_enabled: true,
     compiled_updated_at: '',
     last_validation_error: '',
+    observer_enabled: true,
+    observer_online: false,
+    observer_url: 'http://127.0.0.1:8081',
+    observer_runtime_root: '',
   };
 }
 
@@ -250,6 +254,10 @@ export const useDispatchSettingsStore = defineStore('dispatchSettings', () => {
     hot_reload_enabled: true,
     compiled_updated_at: '',
     last_validation_error: '',
+    observer_enabled: true,
+    observer_online: false,
+    observer_url: 'http://127.0.0.1:8081',
+    observer_runtime_root: '',
   });
   const loadError = ref('');
   const isLoading = ref(false);
@@ -272,6 +280,10 @@ export const useDispatchSettingsStore = defineStore('dispatchSettings', () => {
       hot_reload_enabled: settings.mode_info?.hot_reload_enabled !== false,
       compiled_updated_at: settings.mode_info?.compiled_updated_at || '',
       last_validation_error: settings.mode_info?.last_validation_error || '',
+      observer_enabled: settings.mode_info?.observer_enabled !== false,
+      observer_online: settings.mode_info?.observer_online === true,
+      observer_url: settings.mode_info?.observer_url || 'http://127.0.0.1:8081',
+      observer_runtime_root: settings.mode_info?.observer_runtime_root || '',
     });
 
     const normalized = {

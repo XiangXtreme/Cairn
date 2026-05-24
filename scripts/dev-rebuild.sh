@@ -65,6 +65,23 @@ rebuild_observer() {
   log "Starting/restarting cairn-observer"
   docker compose up -d cairn-observer
   docker compose restart cairn-observer
+
+  log "Checking cairn-observer on 8081"
+  python3 - <<'PY'
+import socket
+import sys
+for _ in range(20):
+    try:
+        with socket.create_connection(("127.0.0.1", 8081), timeout=1):
+            print("[OK] cairn-observer is listening on 127.0.0.1:8081")
+            sys.exit(0)
+    except OSError:
+        pass
+    import time
+    time.sleep(1)
+print("[FAIL] cairn-observer did not become ready on 127.0.0.1:8081")
+sys.exit(1)
+PY
 }
 
 health_check() {

@@ -167,6 +167,26 @@ function runtimeProfileHint(profile: string) {
                   <span class="break-all font-mono">{{ store.meta.compiled_path || store.meta.path }}</span>
                 </div>
               </div>
+              <div class="mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                <div class="flex flex-wrap items-center gap-2">
+                  <BadgePill :tone="store.meta.observer_online ? 'teal' : 'rose'">
+                    {{ store.meta.observer_online ? 'AgentView 在线' : 'AgentView 离线' }}
+                  </BadgePill>
+                  <BadgePill tone="sky">
+                    {{ store.meta.runtime_profile === 'docker-primary' ? 'Docker 主链受管' : '本地 fallback / 自定义' }}
+                  </BadgePill>
+                </div>
+                <div class="mt-3 grid grid-cols-1 gap-2 text-xs text-slate-500 xl:grid-cols-2">
+                  <div class="min-w-0">
+                    <span class="text-slate-400">AgentView 地址：</span>
+                    <span class="break-all font-mono">{{ store.meta.observer_url }}</span>
+                  </div>
+                  <div class="min-w-0">
+                    <span class="text-slate-400">Runtime 根目录：</span>
+                    <span class="break-all font-mono">{{ store.meta.observer_runtime_root || '未提供' }}</span>
+                  </div>
+                </div>
+              </div>
               <p v-if="store.meta.last_validation_error" class="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
                 {{ store.meta.last_validation_error }}
               </p>
