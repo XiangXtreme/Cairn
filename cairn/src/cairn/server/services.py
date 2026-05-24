@@ -460,22 +460,25 @@ def project_artifact_paths(project_id: str) -> list[Path]:
 
 
 def _resolve_runtime_work_dir() -> Path:
+    env_runtime_dir = Path(
+        os.getenv("CAIRN_RUNTIME_DIR", "datas/cairn-runtime")
+    )
     config_path = resolve_dispatch_config_path()
     if not config_path.exists():
-        return Path(".cairn-runtime").resolve()
+        return env_runtime_dir.resolve()
     try:
         import yaml
 
         raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
     except Exception:
-        return Path(".cairn-runtime").resolve()
+        return env_runtime_dir.resolve()
 
     execution = raw.get("execution")
     if not isinstance(execution, dict):
-        return Path(".cairn-runtime").resolve()
+        return env_runtime_dir.resolve()
     work_dir = execution.get("work_dir")
     if not isinstance(work_dir, str) or not work_dir.strip():
-        return Path(".cairn-runtime").resolve()
+        return env_runtime_dir.resolve()
     return (config_path.parent / work_dir).resolve()
 
 

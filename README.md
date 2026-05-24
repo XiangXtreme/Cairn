@@ -101,7 +101,7 @@ System architecture:
 
 **Cairn Server** maintains graph consistency only.
 
-**Cairn Dispatcher** reads the graph, schedules tasks, runs local worker processes, and is the sole writer to the protocol. Each project gets its own local workspace under `.cairn-runtime`; multiple Agent Workers can run concurrently from those workspaces. Agent Workers only receive a prompt and return structured output.
+**Cairn Dispatcher** reads the graph, schedules tasks, runs local worker processes, and is the sole writer to the protocol. Each project gets its own local workspace under `datas/cairn-runtime`; multiple Agent Workers can run concurrently from those workspaces. Agent Workers only receive a prompt and return structured output.
 
 Supported worker backends: **Claude Code**, **Codex**, and **Pi**.
 
@@ -139,17 +139,41 @@ The default runtime executes worker processes directly on the host. This is the 
 Edit `dispatch.yaml` and fill in your LLM endpoints and API keys, then:
  
 ```bash
-# Start the server
-uv run --project cairn cairn serve
- 
-# Run the dispatcher
-uv run --project cairn cairn dispatch --config dispatch.yaml
- 
-# Run startup health checks only
-uv run --project cairn cairn dispatch --config dispatch.yaml --startup-healthcheck-only
+# Start both server and dispatcher with repo-scoped data files
+./scripts/start-cairn-local.sh
+
+# Or start one side only
+./scripts/start-cairn-local.sh --server-only
+./scripts/start-cairn-local.sh --dispatcher-only
+
+# Stop local background processes
+./scripts/stop-cairn-local.sh
 ```
 
-Runtime files, prompt snapshots, and per-project working directories are written under `.cairn-runtime/` by default.
+This local helper keeps the server database and UI config under `datas/cairn/` and keeps runtime artifacts under `datas/cairn-runtime/`, so the UI, database, and dispatcher all point at the same repository-scoped state.
+
+If you prefer raw commands, use the same explicit paths:
+
+```bash
+# Start the server
+CAIRN_UI_DISPATCH_CONFIG=$PWD/datas/cairn/dispatch_ui.yaml \
+  uv run --project cairn cairn serve \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --db-path $PWD/datas/cairn/cairn.db
+
+# Run the dispatcher
+CAIRN_UI_DISPATCH_CONFIG=$PWD/datas/cairn/dispatch_ui.yaml \
+CAIRN_DISPATCH_SETTINGS_MODE=ui \
+  uv run --project cairn cairn dispatch
+
+# Run startup health checks only
+CAIRN_UI_DISPATCH_CONFIG=$PWD/datas/cairn/dispatch_ui.yaml \
+CAIRN_DISPATCH_SETTINGS_MODE=ui \
+  uv run --project cairn cairn dispatch --startup-healthcheck-only
+```
+
+Runtime files, prompt snapshots, and per-project working directories should be kept under `datas/cairn-runtime/` for the local repo-scoped setup.
 
 ### UI Development
 
@@ -229,7 +253,7 @@ What each command does:
 
 ### Cairn Observer UI
 
-Cairn includes a local observer UI under `observer/agentsview`. It is a Cairn-scoped fork of agentsview: it reads only Cairn-generated worker session mappings from `.cairn-runtime/observer/runs`, groups sessions by Cairn project, and renders the original Claude Code / Codex style session view.
+Cairn includes a local observer UI under `observer/agentsview`. It is a Cairn-scoped fork of agentsview: it reads only Cairn-generated worker session mappings from `datas/cairn-runtime/observer/runs`, groups sessions by Cairn project, and renders the original Claude Code / Codex style session view.
 
 On Windows:
 
@@ -243,16 +267,17 @@ On Linux or macOS:
 ./scripts/start-cairn-observer.sh
 ```
 
-The script starts the UI at `http://127.0.0.1:8081/`, stores its SQLite data under `.cairn-runtime/agentsview-data`, and sets `CAIRN_ONLY=1` so non-Cairn local agent sessions are hidden. If the embedded frontend assets are missing after a fresh clone, the script builds them automatically from `observer/agentsview/frontend`.
+The script starts the UI at `http://127.0.0.1:8081/`, stores its SQLite data under `datas/cairn-runtime/agentsview-data`, and sets `CAIRN_ONLY=1` so non-Cairn local agent sessions are hidden. If the embedded frontend assets are missing after a fresh clone, the script builds them automatically from `observer/agentsview/frontend`.
 
-By default the script uses `cairn/.cairn-runtime` when that dispatcher runtime exists, then falls back to the repository-level `.cairn-runtime`. To point it at a different runtime directory:
+By default the script uses `datas/cairn-runtime` when that dispatcher runtime exists, then falls back to older runtime locations for compatibility. To point it at a different runtime directory:
 
 ```powershell
-.\scripts\start-cairn-observer.ps1 -RuntimeDir .cairn-runtime
+.\scripts\start-cairn-observer.ps1 -RuntimeDir datas/cairn-runtime
 ```
 
 ```bash
-./scripts/start-cairn-observer.sh --runtime-dir .cairn-runtime
+./scripts/start-cairn-observer.sh --runtime-dir datas/cairn-runtime
+./scripts/start-cairn-observer.sh --logs
 ```
 
 ## Disclaimer

@@ -175,7 +175,7 @@ class TasksConfig(BaseModel):
 
 class ExecutionConfig(BaseModel):
     backend: ExecutionBackend = "local"
-    work_dir: Path = Path(".cairn-runtime")
+    work_dir: Path = Path("datas/cairn-runtime")
 
 
 class ContainerConfig(BaseModel):

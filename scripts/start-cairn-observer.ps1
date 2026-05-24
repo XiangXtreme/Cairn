@@ -26,6 +26,7 @@ function Resolve-CairnRuntimeDir {
     }
 
     $candidates = @(
+        (Join-Path $Root "datas\cairn-runtime"),
         (Join-Path $Root "cairn\.cairn-runtime"),
         (Join-Path $Root ".cairn-runtime")
     )

@@ -627,7 +627,7 @@ def _compile_ui_bundle(
     source_raw = _load_raw_config(source_path) if source_path.exists() else {}
     result = deepcopy(source_raw)
     result.setdefault("server", source_raw.get("server", "http://127.0.0.1:8000"))
-    result.setdefault("execution", source_raw.get("execution", {"backend": "local", "work_dir": ".cairn-runtime"}))
+    result.setdefault("execution", source_raw.get("execution", {"backend": "local", "work_dir": "datas/cairn-runtime"}))
     if "container" in source_raw:
         result["container"] = deepcopy(source_raw["container"])
     if "common_env" in source_raw:
@@ -1203,14 +1203,36 @@ def _sync_skill_dir(source_dir: Path, target_dir: Path) -> bool:
         return False
     if target_dir.exists():
         try:
+            if _skill_dir_signature(source_dir) == _skill_dir_signature(target_dir):
+                return True
+        except OSError:
+            pass
+    if target_dir.exists():
+        try:
             shutil.rmtree(target_dir)
-        except PermissionError:
+        except OSError:
             return False
     try:
         shutil.copytree(source_dir, target_dir)
-    except PermissionError:
+        shutil.copystat(source_dir, target_dir)
+    except OSError:
         return False
     return True
+
+
+def _skill_dir_signature(root: Path) -> list[tuple[str, bool, int, int]]:
+    signature: list[tuple[str, bool, int, int]] = []
+    for path in sorted(root.rglob("*")):
+        stat = path.stat()
+        signature.append(
+            (
+                str(path.relative_to(root)),
+                path.is_dir(),
+                stat.st_size,
+                stat.st_mtime_ns,
+            )
+        )
+    return signature
 
 
 def _validate_skill_zip_members(members: list[zipfile.ZipInfo]) -> None:

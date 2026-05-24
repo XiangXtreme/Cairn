@@ -28,7 +28,7 @@ tasks:
     recent_run_limit: 10
     max_updates: 4
 execution:
-  work_dir: .cairn-runtime
+  work_dir: datas/cairn-runtime
 workers:
 - name: claudecode_deepseek-v4-pro
   type: claudecode
