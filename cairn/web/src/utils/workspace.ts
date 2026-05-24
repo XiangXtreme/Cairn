@@ -6,6 +6,7 @@ import type {
   ProjectStatus,
   ReplayFrame,
   ReplayState,
+  RunningState,
   TimelineEntry,
   WorkspacePrefs,
 } from '@/types/workspace';
@@ -109,6 +110,28 @@ export function openIntentNodeSize(intent: Intent) {
 
 export function getFactRecord(project: ProjectDetail | null, factId: string) {
   return project?.facts.find((fact) => fact.id === factId) || null;
+}
+
+export function getProjectRunningState(project: ProjectDetail | null): RunningState | null {
+  if (!project) return null;
+  if (project.project.reason) {
+    return {
+      worker: project.project.reason.worker,
+      trigger: project.project.reason.trigger,
+      started_at: project.project.reason.started_at,
+      last_heartbeat_at: project.project.reason.last_heartbeat_at,
+    };
+  }
+  const runningIntent = project.intents
+    .filter((intent) => !intent.concluded_at && intent.worker)
+    .sort((left, right) => (right.last_heartbeat_at || '').localeCompare(left.last_heartbeat_at || ''))[0];
+  if (!runningIntent?.worker) return null;
+  return {
+    worker: runningIntent.worker,
+    trigger: isBootstrapIntent(runningIntent) ? 'bootstrap' : runningIntent.description,
+    started_at: runningIntent.created_at,
+    last_heartbeat_at: runningIntent.last_heartbeat_at || runningIntent.created_at,
+  };
 }
 
 export function buildTimeline(project: ProjectDetail | null): TimelineEntry[] {

@@ -34,6 +34,7 @@ const container = ref<HTMLDivElement | null>(null);
 let cy: any = null;
 let initTimer: number | null = null;
 let viewportTimer: number | null = null;
+let pulseRaf: number | null = null;
 
 const layoutModes: Array<{ id: LayoutMode; label: string }> = [
   { id: 'dagre_tb', label: 'Dagre TB' },
@@ -298,6 +299,37 @@ function applySelection() {
   });
 }
 
+function stopPulseLoop() {
+  if (pulseRaf) window.cancelAnimationFrame(pulseRaf);
+  pulseRaf = null;
+}
+
+function pulseActive() {
+  if (!cy) return;
+  stopPulseLoop();
+  const tick = () => {
+    if (!cy) return;
+    const now = performance.now();
+    const phase = (now % 1800) / 1800;
+    const pulse = 0.5 + 0.5 * Math.sin(phase * Math.PI * 2);
+
+    cy.nodes('[nodeType="in_progress"], [nodeType="bootstrap_running"]').forEach((node: any) => {
+      const isBootstrap = node.data('nodeType') === 'bootstrap_running';
+      const minOpacity = isBootstrap ? 0.55 : 0.35;
+      const maxOpacity = isBootstrap ? 0.98 : 0.8;
+      node.style('background-opacity', minOpacity + (maxOpacity - minOpacity) * pulse);
+    });
+
+    cy.edges('[status="in_progress"], [status="bootstrap_running"]').forEach((edge: any) => {
+      const isBootstrap = edge.data('status') === 'bootstrap_running';
+      edge.style('line-dash-offset', isBootstrap ? -16 * phase : -12 * phase);
+    });
+
+    pulseRaf = window.requestAnimationFrame(tick);
+  };
+  pulseRaf = window.requestAnimationFrame(tick);
+}
+
 function createGraph() {
   if (!container.value || !window.cytoscape) return;
   cy = window.cytoscape({
@@ -322,6 +354,7 @@ function createGraph() {
   });
   applySelection();
   scheduleViewportBias();
+  pulseActive();
 }
 
 function stopInitTimer() {
@@ -365,6 +398,7 @@ function rebuild() {
   cy.layout(layoutOptions()).run();
   applySelection();
   scheduleViewportBias();
+  pulseActive();
 }
 
 function fitGraph() {
@@ -389,6 +423,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   stopInitTimer();
   stopViewportTimer();
+  stopPulseLoop();
   if (cy) cy.destroy();
   cy = null;
 });
@@ -399,6 +434,7 @@ watch(() => props.layoutMode, () => {
     cy.resize();
     cy.layout(layoutOptions()).run();
     scheduleViewportBias();
+    pulseActive();
   }
 });
 watch(() => [props.selectedNode, props.selectedFacts], () => {

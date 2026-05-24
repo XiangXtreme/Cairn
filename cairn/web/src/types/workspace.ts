@@ -56,6 +56,13 @@ export interface ProjectDetail {
   hints: Hint[];
 }
 
+export interface RunningState {
+  worker: string;
+  trigger: string;
+  started_at: string;
+  last_heartbeat_at: string;
+}
+
 export interface CreateProjectRequest {
   title: string;
   origin: string;

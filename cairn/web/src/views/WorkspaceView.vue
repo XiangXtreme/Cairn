@@ -16,6 +16,7 @@ import WorkspaceOverview from '@/components/workspace/WorkspaceOverview.vue';
 import { useProjectStore } from '@/stores/project';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { useWorkspaceUiStore } from '@/stores/workspaceUi';
+import { getProjectRunningState } from '@/utils/workspace';
 
 const workspace = useWorkspaceStore();
 const projectStore = useProjectStore();
@@ -46,6 +47,7 @@ const isProjectDetailRoute = computed(() => Boolean(currentRouteProjectId.value)
 const selectedProjectTitle = computed(() => projectRefs.project.value?.project.title || '');
 const selectedFactId = computed(() => (projectRefs.selectedNode.value?.type === 'fact' ? projectRefs.selectedNode.value.id : null));
 const selectedIntentId = computed(() => (projectRefs.selectedNode.value?.type === 'intent' ? projectRefs.selectedNode.value.id : null));
+const activeReason = computed(() => getProjectRunningState(projectRefs.project.value));
 
 function goSettings() {
   window.location.hash = '#/settings';
@@ -118,6 +120,16 @@ function seedClone() {
   workspaceUi.openModal('clone');
 }
 
+async function seedCloneFromProject(projectId: string) {
+  const projectMeta = workspaceRefs.projects.value.find((item) => item.id === projectId);
+  workspace.setSelectedProject(projectId);
+  forms.clone.title = `${projectMeta?.title || projectId}（克隆）`;
+  if (projectRefs.project.value?.project.id !== projectId) {
+    await projectStore.loadProject(projectId);
+  }
+  workspaceUi.openModal('clone');
+}
+
 function seedConclude(intentId?: string) {
   if (intentId) {
     workspaceUi.pendingIntentId = intentId;
@@ -160,7 +172,7 @@ async function submitRename() {
 }
 
 async function submitClone() {
-  const cloned = await projectStore.cloneProject(forms.clone.title);
+  const cloned = await projectStore.cloneProject(forms.clone.title, workspace.selectedProjectId || undefined);
   await workspace.loadProjects();
   workspaceUi.closeModal();
   if (cloned) await openProject(cloned.project.id);
@@ -293,6 +305,7 @@ onUnmounted(() => {
           @open="openProject"
           @preview="openPreview"
           @toggle="toggleProjectStatus"
+          @clone="seedCloneFromProject"
           @delete="askDelete"
         />
       </template>
@@ -323,16 +336,41 @@ onUnmounted(() => {
             @replay="startReplay"
           />
 
-          <GraphCanvas
-            :project="projectRefs.project.value"
-            :layout-mode="workspaceUiRefs.layoutMode.value"
-            :selected-node="projectRefs.selectedNode.value"
-            :selected-facts="projectRefs.selectedFacts.value"
-            @select-fact="projectStore.selectFact"
-            @select-intent="projectStore.selectIntent"
-            @clear="projectStore.clearSelection"
-            @layout="workspaceUi.layoutMode = $event"
-          />
+          <section class="relative">
+            <div v-if="activeReason" class="absolute right-3 top-14 z-10 max-w-80">
+              <div class="reason-panel-running relative overflow-hidden rounded-2xl border border-sky-200/80 bg-white/92 px-3.5 py-3 shadow-lg shadow-sky-100/60 backdrop-blur">
+                <div class="flex items-start gap-3">
+                  <span class="reason-beacon mt-1 shrink-0" />
+                  <div class="min-w-0">
+                    <div class="text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-500">推理运行中</div>
+                    <div class="mt-0.5 truncate text-sm font-semibold text-slate-700">{{ activeReason.worker }}</div>
+                    <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
+                      <span v-if="activeReason.trigger">触发 {{ activeReason.trigger }}</span>
+                      <span>心跳 {{ new Date(activeReason.last_heartbeat_at).toLocaleString('zh-CN') }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="activeReason" class="reason-graph-scan z-[1]">
+              <span class="reason-graph-grid" />
+              <span class="reason-graph-ambient" />
+              <span class="reason-graph-scanline" />
+              <span class="reason-graph-sweep" />
+            </div>
+
+            <GraphCanvas
+              :project="projectRefs.project.value"
+              :layout-mode="workspaceUiRefs.layoutMode.value"
+              :selected-node="projectRefs.selectedNode.value"
+              :selected-facts="projectRefs.selectedFacts.value"
+              @select-fact="projectStore.selectFact"
+              @select-intent="projectStore.selectIntent"
+              @clear="projectStore.clearSelection"
+              @layout="workspaceUi.layoutMode = $event"
+            />
+          </section>
         </div>
 
         <ProjectSidebar
@@ -451,3 +489,168 @@ onUnmounted(() => {
     </ModalShell>
   </div>
 </template>
+
+<style scoped>
+.reason-panel-running::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 22px;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.14), rgba(56, 189, 248, 0));
+  animation: reasonPanelPulse 2.1s ease-out infinite;
+  pointer-events: none;
+}
+
+.reason-beacon {
+  position: relative;
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+  background: #0ea5e9;
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.16);
+}
+
+.reason-beacon::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  border: 1.5px solid rgba(14, 165, 233, 0.34);
+  animation: reasonBeaconPulse 1.8s ease-out infinite;
+}
+
+.reason-graph-scan {
+  position: absolute;
+  inset: 8px;
+  overflow: hidden;
+  pointer-events: none;
+  border-radius: 18px;
+}
+
+.reason-graph-scan::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 0 1px rgba(125, 211, 252, 0.32),
+    inset 0 0 30px rgba(125, 211, 252, 0.06),
+    inset 0 0 64px rgba(56, 189, 248, 0.03);
+  animation: reasonFramePulse 2.8s ease-in-out infinite;
+}
+
+.reason-graph-scan::after {
+  content: "";
+  position: absolute;
+  inset: 12px;
+  border-radius: 12px;
+  background:
+    linear-gradient(90deg, rgba(125, 211, 252, 0.85), rgba(125, 211, 252, 0.18)),
+    linear-gradient(180deg, rgba(125, 211, 252, 0.85), rgba(125, 211, 252, 0.18)),
+    linear-gradient(270deg, rgba(125, 211, 252, 0.85), rgba(125, 211, 252, 0.18)),
+    linear-gradient(0deg, rgba(125, 211, 252, 0.85), rgba(125, 211, 252, 0.18));
+  background-size: 18px 2px, 2px 18px, 18px 2px, 2px 18px;
+  background-position: left top, left top, right bottom, right bottom;
+  background-repeat: no-repeat;
+  opacity: 0.6;
+}
+
+.reason-graph-scan > span {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.reason-graph-grid {
+  inset: 12px;
+  border-radius: 12px;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(186, 230, 253, 0) 0,
+      rgba(186, 230, 253, 0) 35px,
+      rgba(186, 230, 253, 0.045) 36px,
+      rgba(186, 230, 253, 0.045) 37px
+    ),
+    repeating-linear-gradient(
+      180deg,
+      rgba(186, 230, 253, 0) 0,
+      rgba(186, 230, 253, 0) 35px,
+      rgba(186, 230, 253, 0.04) 36px,
+      rgba(186, 230, 253, 0.04) 37px
+    );
+  opacity: 0.42;
+}
+
+.reason-graph-ambient {
+  inset: 0;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(56, 189, 248, 0.11), rgba(56, 189, 248, 0) 30%),
+    radial-gradient(circle at 84% 16%, rgba(59, 130, 246, 0.08), rgba(59, 130, 246, 0) 24%),
+    linear-gradient(180deg, rgba(186, 230, 253, 0.055), rgba(255, 255, 255, 0) 46%);
+  animation: reasonAmbientPulse 2.4s ease-in-out infinite alternate;
+}
+
+.reason-graph-scanline::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  height: 2px;
+  top: 12%;
+  background: linear-gradient(90deg, rgba(56, 189, 248, 0), rgba(186, 230, 253, 0.96), rgba(56, 189, 248, 0));
+  box-shadow:
+    0 0 18px rgba(125, 211, 252, 0.42),
+    0 0 34px rgba(186, 230, 253, 0.16);
+  animation: reasonGraphScanline 4.2s linear infinite;
+}
+
+.reason-graph-sweep {
+  inset: -18%;
+  background: linear-gradient(
+    103deg,
+    rgba(14, 165, 233, 0) 40%,
+    rgba(56, 189, 248, 0.04) 47%,
+    rgba(255, 255, 255, 0.22) 50%,
+    rgba(125, 211, 252, 0.1) 53%,
+    rgba(14, 165, 233, 0) 60%
+  );
+  transform: translateX(-86%) skewX(-14deg);
+  animation: reasonGraphSweep 4.8s ease-in-out infinite;
+}
+
+@keyframes reasonPanelPulse {
+  0% { opacity: 0.28; transform: scale(0.96); }
+  70% { opacity: 0; transform: scale(1.06); }
+  100% { opacity: 0; transform: scale(1.1); }
+}
+
+@keyframes reasonBeaconPulse {
+  0% { opacity: 0.9; transform: scale(0.7); }
+  100% { opacity: 0; transform: scale(1.6); }
+}
+
+@keyframes reasonFramePulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.9; }
+}
+
+@keyframes reasonAmbientPulse {
+  from { opacity: 0.55; }
+  to { opacity: 0.95; }
+}
+
+@keyframes reasonGraphScanline {
+  0% { transform: translateY(0); opacity: 0; }
+  8% { opacity: 1; }
+  48% { opacity: 0.95; }
+  100% { transform: translateY(520px); opacity: 0; }
+}
+
+@keyframes reasonGraphSweep {
+  0% { transform: translateX(-86%) skewX(-14deg); opacity: 0; }
+  18% { opacity: 0.35; }
+  52% { opacity: 0.95; }
+  100% { transform: translateX(88%) skewX(-14deg); opacity: 0; }
+}
+</style>

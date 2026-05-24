@@ -61,6 +61,7 @@ observer_dir="$repo_root/observer/agentsview"
 prepare_observer_script="$repo_root/scripts/prepare-cairn-observer.sh"
 observer_log="$repo_root/datas/cairn/observer.log"
 observer_pidfile="$repo_root/datas/cairn/observer.pid"
+observer_sync_pidfile="$repo_root/datas/cairn/observer-codex-sync.pid"
 db_path="$repo_root/datas/cairn/cairn.db"
 codex_sessions_root=""
 
@@ -94,21 +95,31 @@ codex_sessions_root="$runtime_dir/observer/codex-sessions"
 rm -rf "$codex_sessions_root"
 mkdir -p "$codex_sessions_root"
 
-while IFS= read -r rollout_path; do
-  [[ -n "$rollout_path" ]] || continue
-  link_name="$(basename "$rollout_path")"
-  target_path="$codex_sessions_root/$link_name"
-  if [[ -e "$target_path" ]]; then
-    stem="${link_name%.jsonl}"
-    ext=".jsonl"
-    suffix=1
-    while [[ -e "$codex_sessions_root/${stem}-$suffix$ext" ]]; do
-      suffix=$((suffix + 1))
-    done
-    target_path="$codex_sessions_root/${stem}-$suffix$ext"
-  fi
-  ln -s "$rollout_path" "$target_path"
-done < <(find "$runtime_dir/projects" -type f -path '*/.cairn/codex-home/*/sessions/*/*/*/rollout-*.jsonl' | sort)
+sync_codex_sessions() {
+  mkdir -p "$codex_sessions_root"
+  find "$codex_sessions_root" -xtype l -delete 2>/dev/null || true
+  while IFS= read -r rollout_path; do
+    [[ -n "$rollout_path" ]] || continue
+    link_name="$(basename "$rollout_path")"
+    target_path="$codex_sessions_root/$link_name"
+    if [[ -e "$target_path" || -L "$target_path" ]]; then
+      existing_target="$(readlink -f "$target_path" 2>/dev/null || true)"
+      if [[ "$existing_target" == "$rollout_path" ]]; then
+        continue
+      fi
+      stem="${link_name%.jsonl}"
+      ext=".jsonl"
+      suffix=1
+      while [[ -e "$codex_sessions_root/${stem}-$suffix$ext" || -L "$codex_sessions_root/${stem}-$suffix$ext" ]]; do
+        suffix=$((suffix + 1))
+      done
+      target_path="$codex_sessions_root/${stem}-$suffix$ext"
+    fi
+    ln -sfn "$rollout_path" "$target_path"
+  done < <(find "$runtime_dir/projects" -type f -path '*/.cairn/codex-home/*/sessions/*/*/*/rollout-*.jsonl' | sort)
+}
+
+sync_codex_sessions
 
 export CAIRN_RUNS_DIR="$runtime_dir/observer/runs"
 export AGENTSVIEW_DATA_DIR="$runtime_dir/agentsview-data"
@@ -128,6 +139,14 @@ if [[ -f "$observer_pidfile" ]]; then
   old_pid="$(cat "$observer_pidfile" 2>/dev/null || true)"
   if [[ -n "${old_pid:-}" ]] && ps -p "$old_pid" >/dev/null 2>&1; then
     kill "$old_pid" >/dev/null 2>&1 || true
+    sleep 1
+  fi
+fi
+
+if [[ -f "$observer_sync_pidfile" ]]; then
+  old_sync_pid="$(cat "$observer_sync_pidfile" 2>/dev/null || true)"
+  if [[ -n "${old_sync_pid:-}" ]] && ps -p "$old_sync_pid" >/dev/null 2>&1; then
+    kill "$old_sync_pid" >/dev/null 2>&1 || true
     sleep 1
   fi
 fi
@@ -152,6 +171,14 @@ fi
 observer_pid="$(cat "$observer_pidfile")"
 echo "  pid:    $observer_pid"
 echo "  log:    $observer_log"
+
+(
+  while true; do
+    sync_codex_sessions
+    sleep 5
+  done
+) >/dev/null 2>&1 &
+echo $! >"$observer_sync_pidfile"
 
 if [[ "$observer_logs" == "1" ]]; then
   tail -f "$observer_log"

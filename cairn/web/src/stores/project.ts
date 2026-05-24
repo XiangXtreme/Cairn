@@ -15,6 +15,7 @@ import {
   buildTimeline,
   cloneProjectDetail,
   createEmptyReplayState,
+  getProjectRunningState,
   replayEventDurationMs,
 } from '@/utils/workspace';
 
@@ -49,6 +50,7 @@ export const useProjectStore = defineStore('project', () => {
     isLoading.value = true;
     try {
       project.value = await api.getProject(projectId);
+      project.value.project.reason = getProjectRunningState(project.value);
     } catch (error) {
       ui.showToast(error instanceof Error ? error.message : '加载项目失败', 'error');
       throw error;
@@ -199,6 +201,7 @@ export const useProjectStore = defineStore('project', () => {
 
   async function createProject(body: CreateProjectRequest) {
     const created = await api.createProject(body);
+    created.project.reason = getProjectRunningState(created);
     project.value = created;
     return created;
   }
@@ -210,9 +213,10 @@ export const useProjectStore = defineStore('project', () => {
     return meta;
   }
 
-  async function cloneProject(title: string) {
-    if (!project.value) return null;
-    const cloned = await api.cloneProject(project.value.project.id, { title });
+  async function cloneProject(title: string, projectId?: string) {
+    const sourceProjectId = projectId || project.value?.project.id;
+    if (!sourceProjectId) return null;
+    const cloned = await api.cloneProject(sourceProjectId, { title });
     return cloned;
   }
 
@@ -226,6 +230,7 @@ export const useProjectStore = defineStore('project', () => {
     if (!project.value) return null;
     const meta = await api.updateProjectStatus(project.value.project.id, { status });
     project.value.project = meta;
+    project.value.project.reason = getProjectRunningState(project.value);
     return meta;
   }
 
@@ -247,6 +252,7 @@ export const useProjectStore = defineStore('project', () => {
       creator: workspaceUi.actorName,
     });
     project.value.intents.push(intent);
+    project.value.project.reason = getProjectRunningState(project.value);
     return intent;
   }
 
@@ -256,6 +262,7 @@ export const useProjectStore = defineStore('project', () => {
       worker: workspaceUi.actorName,
     });
     replaceIntent(intent);
+    project.value.project.reason = getProjectRunningState(project.value);
     return intent;
   }
 
@@ -265,6 +272,7 @@ export const useProjectStore = defineStore('project', () => {
       worker: workspaceUi.actorName,
     });
     replaceIntent(intent);
+    project.value.project.reason = getProjectRunningState(project.value);
     return intent;
   }
 
@@ -276,6 +284,7 @@ export const useProjectStore = defineStore('project', () => {
     });
     project.value.facts.push(response.fact);
     replaceIntent(response.intent);
+    project.value.project.reason = getProjectRunningState(project.value);
     selectFact(response.fact.id);
     return response;
   }
@@ -304,6 +313,7 @@ export const useProjectStore = defineStore('project', () => {
     project.value.project = response.project;
     project.value.facts.push(response.fact);
     project.value.intents.push(response.intent);
+    project.value.project.reason = getProjectRunningState(project.value);
     selectFact(response.fact.id);
     return response;
   }

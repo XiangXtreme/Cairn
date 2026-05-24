@@ -12,6 +12,7 @@ const emit = defineEmits<{
   open: [projectId: string];
   preview: [projectId: string];
   toggle: [projectId: string, nextStatus: 'active' | 'stopped'];
+  clone: [projectId: string];
   delete: [projectId: string];
 }>();
 </script>
@@ -41,6 +42,7 @@ const emit = defineEmits<{
         @open="emit('open', $event)"
         @preview="emit('preview', $event)"
         @toggle="(projectId, nextStatus) => emit('toggle', projectId, nextStatus)"
+        @clone="emit('clone', $event)"
         @delete="emit('delete', $event)"
       />
     </div>
