@@ -58,8 +58,10 @@ services:
       - "8081:8081"
     volumes:
       - ./observer/agentsview:/src
+      - ./scripts:/src/scripts:ro
       - ./datas/cairn-runtime:/runtime
       - ./datas/cairn:/cairn-data:ro
+      - ./datas/cairn-observer-shared:/observer-shared
       - cairn-worker-sessions:/cairn-observer-sessions
     working_dir: /src
     environment:
@@ -67,22 +69,24 @@ services:
       CAIRN_RUNS_DIR: /runtime/observer/runs
       CAIRN_DB_PATH: /cairn-data/cairn.db
       AGENTSVIEW_DATA_DIR: /runtime/agentsview-data
-      CLAUDE_PROJECTS_DIR: /cairn-observer-sessions/.claude/projects
-      CODEX_SESSIONS_DIR: /cairn-observer-sessions/.codex/sessions
-      PI_DIR: /cairn-observer-sessions/.pi/agent/sessions
+      CAIRN_RUNTIME_DIR: /runtime
+      CLAUDE_PROJECTS_DIR: /runtime/observer/claude-projects
+      CODEX_SESSIONS_DIR: /runtime/observer/codex-sessions
+      PI_DIR: /runtime/observer/pi-sessions
+      CAIRN_SHARED_SESSIONS_ROOT: /observer-shared
     depends_on:
       cairn-server:
         condition: service_healthy
     restart: unless-stopped
     command:
-      - ./agentsview
-      - serve
-      - --host
-      - 0.0.0.0
-      - --port
-      - "8081"
-      - --no-browser
-      - --require-auth
+      - sh
+      - -lc
+      - |
+        rm -rf /runtime/observer/codex-sessions /runtime/observer/claude-projects /runtime/observer/pi-sessions
+        mkdir -p /runtime/observer/codex-sessions /runtime/observer/claude-projects /runtime/observer/pi-sessions
+        /src/scripts/sync-cairn-agent-sessions.sh --once >/tmp/observer-sync-bootstrap.log 2>&1
+        /src/scripts/sync-cairn-agent-sessions.sh >/tmp/observer-sync.log 2>&1 &
+        exec ./agentsview serve --host 0.0.0.0 --port 8081 --no-browser --require-auth
 
 volumes:
   cairn-worker-sessions:

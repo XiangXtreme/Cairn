@@ -55,7 +55,7 @@ server_pidfile="$repo_root/datas/cairn/server.pid"
 dispatcher_pidfile="$repo_root/datas/cairn/dispatcher.pid"
 observer_pidfile="$repo_root/datas/cairn/observer.pid"
 observer_sync_pidfile="$repo_root/datas/cairn/observer-codex-sync.pid"
-observer_sync_script="$repo_root/scripts/sync-cairn-codex-sessions.sh"
+observer_sync_script="$repo_root/scripts/sync-cairn-agent-sessions.sh"
 
 stop_pid_if_running() {
   local pid="$1"
