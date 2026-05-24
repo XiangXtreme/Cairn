@@ -255,8 +255,15 @@ def test_claude_runtime_injection_materializes_skill_directories(tmp_path: Path)
     env_updates = prepare_worker_runtime_files(runtime, workspace_name, worker)
 
     claude_home = Path(env_updates["HOME"])
+    workspace_root = tmp_path / "runtime-claude" / "projects" / "proj_skill_claude"
+    workspace_claude_skill_dir = workspace_root / ".claude" / "skills" / "redirect-bypass"
+    workspace_agents_skill_dir = workspace_root / ".agents" / "skills" / "redirect-bypass"
     claude_skill_dir = claude_home / ".claude" / "skills" / "redirect-bypass"
     agents_skill_dir = claude_home / ".agents" / "skills" / "redirect-bypass"
+    assert workspace_claude_skill_dir.exists()
+    assert (workspace_claude_skill_dir / "SKILL.md").exists()
+    assert workspace_agents_skill_dir.exists()
+    assert (workspace_agents_skill_dir / "SKILL.md").exists()
     assert claude_skill_dir.exists()
     assert (claude_skill_dir / "SKILL.md").exists()
     assert agents_skill_dir.exists()

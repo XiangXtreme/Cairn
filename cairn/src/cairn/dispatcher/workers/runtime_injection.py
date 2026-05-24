@@ -306,6 +306,8 @@ def _prepare_claude_home(
         worker,
         skills,
         [
+            PurePath(".claude") / "skills",
+            PurePath(".agents") / "skills",
             PurePath(".cairn") / "claude-home" / worker.name / ".claude" / "skills",
             PurePath(".cairn") / "claude-home" / worker.name / ".agents" / "skills",
         ],
