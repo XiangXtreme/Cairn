@@ -127,6 +127,7 @@ export interface WorkerBindingSettings {
 
 export interface DispatchModeInfo {
   mode: DispatchSettingsMode;
+  runtime_profile: string;
   source_path: string;
   compiled_path: string;
   hot_reload_enabled: boolean;

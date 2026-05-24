@@ -116,6 +116,7 @@ class DispatchWorkerSettings(BaseModel):
 
 class DispatchModeInfo(BaseModel):
     mode: DispatchSettingsMode = "ui"
+    runtime_profile: str = ""
     source_path: str
     compiled_path: str
     hot_reload_enabled: bool = True

@@ -46,6 +46,20 @@ function formatTime(value: string | null | undefined) {
     minute: '2-digit',
   }).format(date);
 }
+
+function runtimeProfileLabel(profile: string) {
+  if (profile === 'docker-primary') return 'Docker 主路径';
+  if (profile === 'local-fallback') return '本地备用路径';
+  if (profile === 'file-custom') return '自定义文件路径';
+  return '未标记';
+}
+
+function runtimeProfileHint(profile: string) {
+  if (profile === 'docker-primary') return '推荐用于正式运行。Worker CLI 与运行隔离默认跟随 Docker runtime。';
+  if (profile === 'local-fallback') return '仅建议用于本地调试或直接依赖宿主机 worker CLI 的场景。';
+  if (profile === 'file-custom') return '当前使用自定义文件配置，请确认它对应的启动链和运行环境。';
+  return '当前运行路径未提供额外说明。';
+}
 </script>
 
 <template>
@@ -67,7 +81,7 @@ function formatTime(value: string | null | undefined) {
           </div>
         </div>
         <div class="hidden min-w-0 items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-500 md:flex">
-          <span class="font-medium text-slate-700">{{ store.mode === 'ui' ? 'UI 配置' : '配置文件' }}</span>
+          <span class="font-medium text-slate-700">{{ runtimeProfileLabel(store.meta.runtime_profile) }}</span>
           <span class="truncate">{{ store.meta.compiled_path || store.meta.path }}</span>
         </div>
       </div>
@@ -126,6 +140,7 @@ function formatTime(value: string | null | undefined) {
               </div>
               <div class="flex flex-wrap items-center gap-2">
                 <BadgePill tone="sky">当前模式 {{ store.mode === 'ui' ? 'UI 配置' : '配置文件' }}</BadgePill>
+                <BadgePill tone="brand">{{ runtimeProfileLabel(store.meta.runtime_profile) }}</BadgePill>
                 <AppButton :icon="RefreshCw" @click="store.loadDispatchSettings()">重新加载</AppButton>
               </div>
             </div>
@@ -138,6 +153,9 @@ function formatTime(value: string | null | undefined) {
               </div>
               <p class="mt-3 text-xs leading-5 text-slate-500">
                 配置来源由服务启动参数决定。未显式指定时，默认使用 UI 配置。
+              </p>
+              <p class="mt-2 text-xs leading-5 text-slate-500">
+                {{ runtimeProfileHint(store.meta.runtime_profile) }}
               </p>
               <div class="mt-3 grid grid-cols-1 gap-2 text-xs text-slate-500 xl:grid-cols-2">
                 <div class="min-w-0">

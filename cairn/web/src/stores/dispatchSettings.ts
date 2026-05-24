@@ -156,6 +156,7 @@ function serializeWorker(worker: EditableWorkerSettings) {
 function defaultModeInfo(): DispatchModeInfo {
   return {
     mode: 'ui',
+    runtime_profile: 'docker-primary',
     source_path: '',
     compiled_path: '',
     hot_reload_enabled: true,
@@ -243,6 +244,7 @@ export const useDispatchSettingsStore = defineStore('dispatchSettings', () => {
     path: '',
     writable: false,
     restart_required: false,
+    runtime_profile: 'docker-primary',
     source_path: '',
     compiled_path: '',
     hot_reload_enabled: true,

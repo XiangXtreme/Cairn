@@ -185,6 +185,17 @@ def resolve_dispatch_settings_path(mode: DispatchSettingsMode | None = None, *, 
     return resolve_ui_dispatch_config_path()
 
 
+def resolve_runtime_profile(mode: DispatchSettingsMode, path: Path) -> str:
+    path_text = str(path).lower()
+    if mode == "ui":
+        return "docker-primary"
+    if path.name == "dispatch_docker.yaml" or "docker" in path_text:
+        return "docker-primary"
+    if path.name == "dispatch.yaml":
+        return "local-fallback"
+    return "file-custom"
+
+
 def read_dispatch_settings(mode: DispatchSettingsMode | None = None) -> DispatchSettings:
     resolved_mode = resolve_dispatch_settings_mode(mode)
     if resolved_mode == "ui":
@@ -207,6 +218,7 @@ def read_dispatch_settings(mode: DispatchSettingsMode | None = None) -> Dispatch
         writable = _bundle_writable(source_path)
         mode_info = DispatchModeInfo(
             mode="ui",
+            runtime_profile=resolve_runtime_profile("ui", path),
             source_path=str(source_path),
             compiled_path=str(path),
             hot_reload_enabled=bool(ui_bundle["settings"].get("hot_reload", True)),
@@ -220,6 +232,7 @@ def read_dispatch_settings(mode: DispatchSettingsMode | None = None) -> Dispatch
         writable = os.access(path, os.W_OK)
         mode_info = DispatchModeInfo(
             mode="file",
+            runtime_profile=resolve_runtime_profile("file", path),
             source_path=str(path),
             compiled_path=str(path),
             hot_reload_enabled=True,
