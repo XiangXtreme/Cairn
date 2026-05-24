@@ -28,7 +28,7 @@ tasks:
     recent_run_limit: 10
     max_updates: 4
 execution:
-  work_dir: .cairn-runtime
+  work_dir: datas/cairn-runtime
 workers:
 - name: claudecode_deepseek-v4-pro
   type: claudecode
@@ -42,6 +42,9 @@ workers:
     ANTHROPIC_MODEL: deepseek-v4-pro
     ANTHROPIC_BASE_URL: https://api.deepseek.com/anthropic
     ANTHROPIC_AUTH_TOKEN: sk-your-deepseek-api-key
+    CAIRN_PROVIDER_SPEC: '{"id":"claudecode_deepseek-v4-pro_provider","name":"claudecode_deepseek-v4-pro
+      Provider","base_url":"https://api.deepseek.com/anthropic","extra_env":{}}'
+  enabled: true
 - name: codex_qwen3.6-plus
   type: codex
   task_types:
@@ -54,6 +57,9 @@ workers:
     CODEX_MODEL: qwen3.6-plus
     CODEX_BASE_URL: https://dashscope.aliyuncs.com/compatible-mode/v1
     OPENAI_API_KEY: sk-your-dashscope-api-key
+    CAIRN_PROVIDER_SPEC: '{"id":"codex_qwen3.6-plus_provider","name":"codex_qwen3.6-plus
+      Provider","base_url":"https://dashscope.aliyuncs.com/compatible-mode/v1","extra_env":{}}'
+  enabled: true
 - name: pi_qwen3.6-plus
   type: pi
   task_types:
@@ -68,3 +74,6 @@ workers:
     PI_API_KEY: sk-your-dashscope-api-key
     PI_PROVIDER_API: openai-completions
     PI_MODEL_CONTEXT_WINDOW: '262144'
+    CAIRN_PROVIDER_SPEC: '{"id":"pi_qwen3.6-plus_provider","name":"pi_qwen3.6-plus
+      Provider","base_url":"https://dashscope.aliyuncs.com/compatible-mode/v1","extra_env":{}}'
+  enabled: true
