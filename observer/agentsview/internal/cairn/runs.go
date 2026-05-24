@@ -116,8 +116,40 @@ func readRun(path string) (Run, error) {
 	if err := json.Unmarshal(data, &run); err != nil {
 		return Run{}, fmt.Errorf("parse %s: %w", path, err)
 	}
+	normalizeRunSessionID(&run)
 	run.SourcePath = path
 	return run, nil
+}
+
+func normalizeRunSessionID(run *Run) {
+	if run == nil || run.SessionID == nil {
+		return
+	}
+	sessionID := strings.TrimSpace(*run.SessionID)
+	if sessionID == "" {
+		run.SessionID = nil
+		return
+	}
+	if strings.Contains(sessionID, ":") {
+		run.SessionID = &sessionID
+		return
+	}
+
+	var prefix string
+	switch strings.ToLower(strings.TrimSpace(run.AgentType)) {
+	case "codex":
+		prefix = "codex"
+	case "claudecode", "claude":
+		prefix = "claude"
+	case "pi":
+		prefix = "pi"
+	}
+	if prefix == "" {
+		run.SessionID = &sessionID
+		return
+	}
+	value := prefix + ":" + sessionID
+	run.SessionID = &value
 }
 
 func matches(run Run, filter ListFilter) bool {

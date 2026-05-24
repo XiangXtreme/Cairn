@@ -5,7 +5,11 @@ from pathlib import Path
 
 from cairn.dispatcher.config import ExecutionConfig, WorkerConfig
 from cairn.dispatcher.runtime.local import LocalRuntimeManager
-from cairn.dispatcher.tasks.common import extract_worker_skills, start_worker_run_record
+from cairn.dispatcher.tasks.common import (
+    extract_worker_skills,
+    normalize_observer_session_id,
+    start_worker_run_record,
+)
 
 
 def test_extract_worker_skills_reads_ids_names_and_paths() -> None:
@@ -89,3 +93,44 @@ def test_start_worker_run_record_persists_skill_metadata(tmp_path: Path) -> None
     assert payload["skill_ids"] == ["cairn-agent-mcp-safety"]
     assert payload["skill_names"] == ["Cairn Agent MCP Safety"]
     assert payload["skill_source_paths"] == ["/repo/skills/cairn-agent-mcp-safety"]
+
+
+def test_start_worker_run_record_normalizes_session_id_for_observer(tmp_path: Path) -> None:
+    worker = WorkerConfig(
+        name="codex_main",
+        type="codex",
+        enabled=True,
+        task_types=["reason"],
+        max_running=1,
+        priority=0,
+        env={
+            "CODEX_MODEL": "gpt-5.5",
+            "CODEX_BASE_URL": "https://ai.example.test/v1",
+            "OPENAI_API_KEY": "sk-test",
+        },
+    )
+    runtime = LocalRuntimeManager(ExecutionConfig(backend="local", work_dir=tmp_path))
+    workspace_name = runtime.ensure_running("proj_test")
+
+    record = start_worker_run_record(
+        runtime,
+        project_id="proj_test",
+        intent_id=None,
+        phase="reason_execute",
+        worker=worker,
+        agent_type="codex",
+        workspace_name=workspace_name,
+        session_id="session-1",
+    )
+
+    run_path = tmp_path / "observer" / "runs" / "proj_test" / f"{record.run_id}.json"
+    payload = json.loads(run_path.read_text(encoding="utf-8"))
+    assert payload["session_id"] == "codex:session-1"
+
+
+def test_normalize_observer_session_id_handles_known_prefixes() -> None:
+    assert normalize_observer_session_id("codex", "abc") == "codex:abc"
+    assert normalize_observer_session_id("claudecode", "abc") == "claude:abc"
+    assert normalize_observer_session_id("pi", "abc") == "pi:abc"
+    assert normalize_observer_session_id("codex", "codex:abc") == "codex:abc"
+    assert normalize_observer_session_id("unknown", "abc") == "abc"

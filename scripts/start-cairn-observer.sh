@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-host="127.0.0.1"
+host="0.0.0.0"
 port="8081"
 runtime_dir=""
 no_build="0"
@@ -39,7 +39,7 @@ while [[ $# -gt 0 ]]; do
 Usage: scripts/start-cairn-observer.sh [options]
 
 Options:
-  --host HOST             Bind host, default 127.0.0.1
+  --host HOST             Bind host, default 0.0.0.0
   --port PORT             Bind port, default 8081
   --runtime-dir DIR       Cairn runtime directory, default auto-detect
   --no-build              Do not auto-prepare the local observer bundle
@@ -61,6 +61,8 @@ observer_dir="$repo_root/observer/agentsview"
 prepare_observer_script="$repo_root/scripts/prepare-cairn-observer.sh"
 observer_log="$repo_root/datas/cairn/observer.log"
 observer_pidfile="$repo_root/datas/cairn/observer.pid"
+db_path="$repo_root/datas/cairn/cairn.db"
+codex_sessions_root=""
 
 if [[ ! -d "$observer_dir" ]]; then
   echo "Cairn observer source not found: $observer_dir" >&2
@@ -88,14 +90,38 @@ fi
 mkdir -p "$runtime_dir"
 mkdir -p "$repo_root/datas/cairn"
 
+codex_sessions_root="$runtime_dir/observer/codex-sessions"
+rm -rf "$codex_sessions_root"
+mkdir -p "$codex_sessions_root"
+
+while IFS= read -r rollout_path; do
+  [[ -n "$rollout_path" ]] || continue
+  link_name="$(basename "$rollout_path")"
+  target_path="$codex_sessions_root/$link_name"
+  if [[ -e "$target_path" ]]; then
+    stem="${link_name%.jsonl}"
+    ext=".jsonl"
+    suffix=1
+    while [[ -e "$codex_sessions_root/${stem}-$suffix$ext" ]]; do
+      suffix=$((suffix + 1))
+    done
+    target_path="$codex_sessions_root/${stem}-$suffix$ext"
+  fi
+  ln -s "$rollout_path" "$target_path"
+done < <(find "$runtime_dir/projects" -type f -path '*/.cairn/codex-home/*/sessions/*/*/*/rollout-*.jsonl' | sort)
+
 export CAIRN_RUNS_DIR="$runtime_dir/observer/runs"
 export AGENTSVIEW_DATA_DIR="$runtime_dir/agentsview-data"
 export CAIRN_ONLY=1
+export CAIRN_DB_PATH="$db_path"
+export CODEX_SESSIONS_DIR="$codex_sessions_root"
 
 echo "Starting Cairn Observer"
 echo "  source: $observer_dir"
 echo "  runs:   $CAIRN_RUNS_DIR"
 echo "  data:   $AGENTSVIEW_DATA_DIR"
+echo "  db:     $CAIRN_DB_PATH"
+echo "  codex:  $CODEX_SESSIONS_DIR"
 echo "  url:    http://$host:$port/"
 
 if [[ -f "$observer_pidfile" ]]; then
@@ -117,6 +143,8 @@ fi
     CAIRN_RUNS_DIR="$CAIRN_RUNS_DIR" \
     AGENTSVIEW_DATA_DIR="$AGENTSVIEW_DATA_DIR" \
     CAIRN_ONLY="$CAIRN_ONLY" \
+    CAIRN_DB_PATH="$CAIRN_DB_PATH" \
+    CODEX_SESSIONS_DIR="$CODEX_SESSIONS_DIR" \
     "${args[@]}" >"$observer_log" 2>&1 < /dev/null &
   echo $! >"$observer_pidfile"
 )

@@ -22,6 +22,12 @@ LOG_PREVIEW_LIMIT = 1200
 GRAPH_SNAPSHOT_ROOT = "prompts"
 OBSERVER_RUN_ROOT = "runs"
 LOG = logging.getLogger(__name__)
+AGENT_SESSION_PREFIXES = {
+    "codex": "codex",
+    "claudecode": "claude",
+    "claude": "claude",
+    "pi": "pi",
+}
 
 
 @dataclass(slots=True)
@@ -74,6 +80,20 @@ def now_utc_iso() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def normalize_observer_session_id(agent_type: str, session_id: str | None) -> str | None:
+    if session_id is None:
+        return None
+    value = session_id.strip()
+    if not value:
+        return None
+    if ":" in value:
+        return value
+    prefix = AGENT_SESSION_PREFIXES.get(agent_type.strip().lower())
+    if prefix is None:
+        return value
+    return f"{prefix}:{value}"
+
+
 def start_worker_run_record(
     runtime_manager: RuntimeManager,
     *,
@@ -96,7 +116,7 @@ def start_worker_run_record(
         agent_type=agent_type,
         workspace_name=workspace_name,
         workspace_path=str(runtime_manager.workspace_path(workspace_name)),
-        session_id=session_id,
+        session_id=normalize_observer_session_id(agent_type, session_id),
         status="running",
         started_at=started_at,
         updated_at=started_at,
@@ -118,7 +138,7 @@ def finish_worker_run_record(
 ) -> None:
     if record is None:
         return
-    record.session_id = session_id or record.session_id
+    record.session_id = normalize_observer_session_id(record.agent_type, session_id) or record.session_id
     record.status = "cancelled" if result.cancelled else "timeout" if did_timeout(result) else "success" if result.returncode == 0 else "failed"
     record.updated_at = now_utc_iso()
     record.ended_at = record.updated_at
@@ -143,8 +163,9 @@ def update_worker_run_record(
     if record is None:
         return
     changed = False
-    if session_id and session_id != record.session_id:
-        record.session_id = session_id
+    normalized_session_id = normalize_observer_session_id(record.agent_type, session_id)
+    if normalized_session_id and normalized_session_id != record.session_id:
+        record.session_id = normalized_session_id
         changed = True
     if stdout is not None:
         stdout_preview = preview(stdout)
