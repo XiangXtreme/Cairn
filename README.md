@@ -267,7 +267,7 @@ On Linux or macOS:
 ./scripts/start-cairn-observer.sh
 ```
 
-The script starts the UI at `http://127.0.0.1:8081/`, stores its SQLite data under `datas/cairn-runtime/agentsview-data`, and sets `CAIRN_ONLY=1` so non-Cairn local agent sessions are hidden. If the embedded frontend assets are missing after a fresh clone, the script builds them automatically from `observer/agentsview/frontend`.
+The script starts the UI at `http://127.0.0.1:8081/` and binds to `0.0.0.0` by default so the observer is reachable from the local network, stores its SQLite data under `datas/cairn-runtime/agentsview-data`, and sets `CAIRN_ONLY=1` so non-Cairn local agent sessions are hidden. If the embedded frontend assets are missing after a fresh clone, the script builds them automatically from `observer/agentsview/frontend`.
 
 By default the script uses `datas/cairn-runtime` when that dispatcher runtime exists, then falls back to older runtime locations for compatibility. To point it at a different runtime directory:
 

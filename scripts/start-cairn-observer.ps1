@@ -1,5 +1,5 @@
 param(
-    [string]$HostAddress = "127.0.0.1",
+    [string]$HostAddress = "0.0.0.0",
     [int]$Port = 8081,
     [string]$RuntimeDir = "",
     [switch]$NoBuild,
