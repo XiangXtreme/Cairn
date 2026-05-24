@@ -349,12 +349,12 @@ onUnmounted(() => {
       </section>
     </main>
 
-    <ModalShell v-if="workspaceUiRefs.activeModal.value === 'create'" title="新建项目" description="输入 origin / goal，新的 Vue workspace 会直接打开项目详情。" @close="closeModal">
+    <ModalShell v-if="workspaceUiRefs.activeModal.value === 'create'" title="新建项目" description="填写起点与目标后，系统将直接进入项目详情页。" @close="closeModal">
       <div class="space-y-4 p-5">
         <FormField label="项目标题"><TextInput v-model="forms.create.title" /></FormField>
-        <FormField label="Origin"><textarea v-model="forms.create.origin" class="min-h-28 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" /></FormField>
-        <FormField label="Goal"><textarea v-model="forms.create.goal" class="min-h-28 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" /></FormField>
-        <FormField label="初始 Hint"><textarea v-model="forms.create.hint" class="min-h-24 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" /></FormField>
+        <FormField label="起点"><textarea v-model="forms.create.origin" class="min-h-28 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" /></FormField>
+        <FormField label="目标"><textarea v-model="forms.create.goal" class="min-h-28 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" /></FormField>
+        <FormField label="初始提示"><textarea v-model="forms.create.hint" class="min-h-24 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" /></FormField>
         <div class="flex justify-end"><AppButton variant="brand" @click="submitCreate">创建并进入</AppButton></div>
       </div>
     </ModalShell>
@@ -373,18 +373,18 @@ onUnmounted(() => {
       </div>
     </ModalShell>
 
-    <ModalShell v-if="workspaceUiRefs.activeModal.value === 'hint'" title="添加 Hint" @close="closeModal">
+    <ModalShell v-if="workspaceUiRefs.activeModal.value === 'hint'" title="添加提示" @close="closeModal">
       <div class="space-y-4 p-5">
-        <FormField label="Hint"><textarea v-model="forms.hint.content" class="min-h-28 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" /></FormField>
+        <FormField label="提示内容"><textarea v-model="forms.hint.content" class="min-h-28 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" /></FormField>
         <div class="flex justify-end"><AppButton variant="brand" @click="submitHint">添加</AppButton></div>
       </div>
     </ModalShell>
 
-    <ModalShell v-if="workspaceUiRefs.activeModal.value === 'intent'" title="新增 Intent" description="当前使用右侧已选中的事实作为来源。" @close="closeModal">
+    <ModalShell v-if="workspaceUiRefs.activeModal.value === 'intent'" title="创建意图" description="当前使用已选中的事实作为来源。" @close="closeModal">
       <div class="space-y-4 p-5">
-        <FormField label="Description"><textarea v-model="forms.intent.description" class="min-h-28 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" /></FormField>
+        <FormField label="意图描述"><textarea v-model="forms.intent.description" class="min-h-28 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" /></FormField>
         <div class="text-xs text-slate-400">来源：{{ projectRefs.selectedFacts.value.join(', ') || '未选择 facts' }}</div>
-        <div class="flex justify-end"><AppButton variant="brand" :disabled="projectRefs.selectedFacts.value.length === 0" @click="submitIntent">创建 Intent</AppButton></div>
+        <div class="flex justify-end"><AppButton variant="brand" :disabled="projectRefs.selectedFacts.value.length === 0" @click="submitIntent">创建意图</AppButton></div>
       </div>
     </ModalShell>
 
@@ -396,10 +396,10 @@ onUnmounted(() => {
       </div>
     </ModalShell>
 
-    <ModalShell v-if="workspaceUiRefs.activeModal.value === 'reopen'" title="Reopen 项目" description="为已完成项目注入新的外部反馈事实。" @close="closeModal">
+    <ModalShell v-if="workspaceUiRefs.activeModal.value === 'reopen'" title="重新打开项目" description="为已完成项目追加新的外部反馈事实。" @close="closeModal">
       <div class="space-y-4 p-5">
         <FormField label="反馈描述"><textarea v-model="forms.reopen.description" class="min-h-28 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" /></FormField>
-        <div class="flex justify-end"><AppButton variant="brand" @click="submitReopen">Reopen</AppButton></div>
+        <div class="flex justify-end"><AppButton variant="brand" @click="submitReopen">重新打开</AppButton></div>
       </div>
     </ModalShell>
 
@@ -410,9 +410,9 @@ onUnmounted(() => {
       </div>
     </ModalShell>
 
-    <ModalShell v-if="workspaceUiRefs.activeModal.value === 'conclude'" title="提交结论" description="为当前已认领的 intent 生成新的 fact。" @close="closeModal">
+    <ModalShell v-if="workspaceUiRefs.activeModal.value === 'conclude'" title="提交结论" description="为当前已认领的意图生成新的事实。" @close="closeModal">
       <div class="space-y-4 p-5">
-        <div class="text-xs text-slate-400">Intent：{{ workspaceUiRefs.pendingIntentId.value || selectedIntentId }}</div>
+        <div class="text-xs text-slate-400">意图：{{ workspaceUiRefs.pendingIntentId.value || selectedIntentId }}</div>
         <FormField label="结论描述"><textarea v-model="forms.conclude.description" class="min-h-28 w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100" /></FormField>
         <div class="flex justify-end"><AppButton variant="brand" @click="submitConclude">提交结论</AppButton></div>
       </div>

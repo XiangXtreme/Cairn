@@ -48,11 +48,11 @@ function nextStatus() {
     <div class="mt-4 grid grid-cols-4 gap-2 text-center text-xs">
       <div class="rounded-2xl bg-slate-50 px-2 py-2">
         <div class="font-semibold text-slate-900">{{ project.fact_count }}</div>
-        <div class="mt-1 text-slate-400">Facts</div>
+        <div class="mt-1 text-slate-400">事实</div>
       </div>
       <div class="rounded-2xl bg-slate-50 px-2 py-2">
         <div class="font-semibold text-slate-900">{{ project.intent_count }}</div>
-        <div class="mt-1 text-slate-400">Intents</div>
+        <div class="mt-1 text-slate-400">意图</div>
       </div>
       <div class="rounded-2xl bg-slate-50 px-2 py-2">
         <div class="font-semibold text-slate-900">{{ project.working_intent_count }}</div>
@@ -60,7 +60,7 @@ function nextStatus() {
       </div>
       <div class="rounded-2xl bg-slate-50 px-2 py-2">
         <div class="font-semibold text-slate-900">{{ project.hint_count }}</div>
-        <div class="mt-1 text-slate-400">Hints</div>
+        <div class="mt-1 text-slate-400">提示</div>
       </div>
     </div>
 
@@ -77,7 +77,7 @@ function nextStatus() {
       <AppButton :icon="project.status === 'active' ? Pause : Play" size="sm" @click="emit('toggle', project.id, nextStatus())">
         {{ project.status === 'active' ? '暂停' : '恢复' }}
       </AppButton>
-      <AppButton :icon="Clock3" size="sm" @click="emit('preview', project.id)">YAML / 时间线</AppButton>
+      <AppButton :icon="Clock3" size="sm" @click="emit('preview', project.id)">导出 / 时间线</AppButton>
       <CheckCircle2 v-if="project.status === 'completed'" class="ml-auto h-4 w-4 text-slate-400" />
     </div>
   </article>

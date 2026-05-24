@@ -35,15 +35,15 @@ const emit = defineEmits<{
           <BadgePill :tone="projectStatusTone(project.project.status)">{{ project.project.status }}</BadgePill>
         </div>
         <div class="mt-1 text-xs font-mono text-slate-400">{{ project.project.id }}</div>
-      </div>
+        </div>
 
       <div class="flex flex-wrap items-center gap-2">
         <AppButton :icon="ArrowLeft" size="sm" variant="ghost" @click="emit('back')">返回列表</AppButton>
-        <AppButton :icon="Sparkles" size="sm" variant="brand" :disabled="replayActive" @click="emit('intent')">新增 Intent</AppButton>
-        <AppButton :icon="TicketPlus" size="sm" :disabled="replayActive" @click="emit('replay')">Replay</AppButton>
+        <AppButton :icon="Sparkles" size="sm" variant="brand" :disabled="replayActive" @click="emit('intent')">创建意图</AppButton>
+        <AppButton :icon="TicketPlus" size="sm" :disabled="replayActive" @click="emit('replay')">回放</AppButton>
         <AppButton :icon="Lightbulb" size="sm" :disabled="replayActive" @click="emit('hint')">加 Hint</AppButton>
-        <AppButton :icon="FileCode2" size="sm" @click="emit('yaml')">YAML</AppButton>
-        <AppButton :icon="Pencil" size="sm" :disabled="replayActive" @click="emit('rename')">改名</AppButton>
+        <AppButton :icon="FileCode2" size="sm" @click="emit('yaml')">导出</AppButton>
+        <AppButton :icon="Pencil" size="sm" :disabled="replayActive" @click="emit('rename')">重命名</AppButton>
         <AppButton :icon="Copy" size="sm" :disabled="replayActive" @click="emit('clone')">克隆</AppButton>
         <AppButton
           v-if="project.project.status === 'completed'"
@@ -52,7 +52,7 @@ const emit = defineEmits<{
           :disabled="replayActive"
           @click="emit('reopen')"
         >
-          Reopen
+          重新打开
         </AppButton>
         <AppButton
           v-else
@@ -70,7 +70,7 @@ const emit = defineEmits<{
           :disabled="replayActive"
           @click="emit('complete')"
         >
-          Complete
+          标记完成
         </AppButton>
         <AppButton :icon="Trash2" size="sm" variant="danger" :disabled="replayActive" @click="emit('delete')">删除</AppButton>
       </div>

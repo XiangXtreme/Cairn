@@ -32,9 +32,9 @@ const emit = defineEmits<{
 
 const tabs: Array<{ id: SideTab; label: string; icon: typeof BookText }> = [
   { id: 'detail', label: '节点', icon: Network },
-  { id: 'timeline', label: 'Timeline', icon: BookText },
-  { id: 'hints', label: 'Hints', icon: Lightbulb },
-  { id: 'intents', label: 'Intents', icon: ListTree },
+  { id: 'timeline', label: '时间线', icon: BookText },
+  { id: 'hints', label: '提示', icon: Lightbulb },
+  { id: 'intents', label: '意图', icon: ListTree },
 ];
 
 function intentTone(intent: Intent) {
@@ -66,10 +66,10 @@ function canConclude(intent: Intent) {
   <aside class="flex h-full min-h-[620px] flex-col rounded-[28px] border border-slate-200 bg-slate-50 shadow-sm">
     <div class="border-b border-slate-200 px-3 py-3">
       <div class="mb-3 rounded-2xl border border-slate-200 bg-white px-3 py-3">
-        <div class="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Workspace Prefs</div>
+        <div class="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">本地偏好</div>
         <div class="mt-3 space-y-3">
           <div>
-            <div class="mb-1 text-xs text-slate-500">Actor</div>
+            <div class="mb-1 text-xs text-slate-500">执行者名称</div>
             <TextInput :model-value="actorName" @update:model-value="emit('updateActorName', $event)" />
           </div>
           <div class="text-[11px] text-slate-400">侧栏宽度 {{ sidePanelWidth }}px</div>
@@ -96,13 +96,13 @@ function canConclude(intent: Intent) {
         <article v-if="selectedFactId || selectedIntentId" class="rounded-2xl border border-brand-200 bg-brand-50/60 p-3">
           <div class="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-700">当前选中</div>
           <div class="mt-2 text-sm text-slate-800">
-            <template v-if="selectedFactId">Fact {{ selectedFactId }}</template>
-            <template v-else-if="selectedIntentId">Intent {{ selectedIntentId }}</template>
+            <template v-if="selectedFactId">事实 {{ selectedFactId }}</template>
+            <template v-else-if="selectedIntentId">意图 {{ selectedIntentId }}</template>
           </div>
         </article>
 
         <article class="rounded-2xl border border-slate-200 bg-white p-3">
-          <div class="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Facts</div>
+          <div class="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">事实</div>
           <div class="mt-3 space-y-2">
             <button
               v-for="fact in project.facts"
@@ -121,7 +121,7 @@ function canConclude(intent: Intent) {
         </article>
 
         <article class="rounded-2xl border border-slate-200 bg-white p-3">
-          <div class="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Intents</div>
+          <div class="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">意图</div>
           <div class="mt-3 space-y-2">
             <button
               v-for="intent in project.intents"

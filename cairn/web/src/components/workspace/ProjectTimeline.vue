@@ -18,6 +18,17 @@ function toneFor(entry: TimelineEntry) {
   if (entry.type === 'hint_added') return 'amber';
   return 'slate';
 }
+
+function labelFor(entry: TimelineEntry) {
+  if (entry.type === 'project_created') return '项目创建';
+  if (entry.type === 'hint_added') return '提示';
+  if (entry.type === 'reason_started') return '推理';
+  if (entry.type === 'intent_running') return '执行中';
+  if (entry.type === 'intent_declared') return '意图';
+  if (entry.type === 'intent_concluded') return '结论';
+  if (entry.type === 'project_completed') return '完成';
+  return entry.type;
+}
 </script>
 
 <template>
@@ -33,7 +44,7 @@ function toneFor(entry: TimelineEntry) {
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
           <div class="flex items-center gap-2">
-            <BadgePill :tone="toneFor(entry)">{{ entry.type.replaceAll('_', ' ') }}</BadgePill>
+            <BadgePill :tone="toneFor(entry)">{{ labelFor(entry) }}</BadgePill>
             <span class="text-[11px] text-slate-400">{{ new Date(entry.timestamp).toLocaleString('zh-CN') }}</span>
           </div>
           <div class="mt-2 text-sm font-medium text-slate-900">{{ entry.title }}</div>

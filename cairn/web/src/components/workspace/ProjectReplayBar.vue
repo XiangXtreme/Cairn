@@ -20,7 +20,7 @@ const emit = defineEmits<{
   <section v-if="replay.active" class="rounded-[28px] border border-violet-200 bg-violet-50/70 p-4 shadow-sm">
     <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
       <div>
-        <div class="text-[11px] font-semibold uppercase tracking-[0.14em] text-violet-600">Replay</div>
+        <div class="text-[11px] font-semibold uppercase tracking-[0.14em] text-violet-600">回放</div>
         <div class="mt-1 text-sm font-medium text-slate-900">
           帧 {{ replay.frameIndex + 1 }} / {{ replay.frames.length }}
           <span class="ml-2 text-slate-500">{{ replay.playing ? '播放中' : '已暂停' }}</span>
